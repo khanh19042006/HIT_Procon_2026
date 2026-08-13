@@ -144,6 +144,7 @@ Sửa hàm `solve` trong [Solver.cpp](file:///d:/HIT/Procon/HexaUdon/src/solver/
 
 ## 7. Thư Mục Tài Liệu Hướng Dẫn Chi Tiết (`docs/`)
 
+- 📖 **[docs/CLONE_TO_RUN.md](file:///d:/HIT/Procon/HexaUdon/docs/CLONE_TO_RUN.md)**: Hướng dẫn khôi phục môi trường và chạy lại dự án từ máy mới sau khi `git clone`.
 - 📖 **[docs/GUIDE.md](file:///d:/HIT/Procon/HexaUdon/docs/GUIDE.md)**: Cẩm nang tra cứu chi tiết cách lấy thông tin của TẤT CẢ thực thể trên bản đồ (Vị trí & tồn kho Udon của Gian hàng, Vị trí & Xăng của Agent, Xe đối thủ, Tắc đường...).
 - 📖 **[docs/GUIDE_CONFIG_AND_CONTROL.md](file:///d:/HIT/Procon/HexaUdon/docs/GUIDE_CONFIG_AND_CONTROL.md)**: Hướng dẫn cấu trúc biến `GameConfig`, `GameState` và cú pháp lập trình điều khiển Agent.
 - 📖 **[docs/GUIDE_TESTING.md](file:///d:/HIT/Procon/HexaUdon/docs/GUIDE_TESTING.md)**: Hướng dẫn công cụ test visualizer debug agent thời gian thực.
