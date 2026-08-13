@@ -1,0 +1,28 @@
+# Executables / Compiled binaries
+*.exe
+*.out
+*.app
+*.o
+*.obj
+
+# Build directories
+build/
+bin/
+obj/
+out/
+.vs/
+.vscode/
+.idea/
+
+# Temporary & Log files
+*.log
+*.tmp
+
+# Custom temporary input/output files
+pdf_text.txt
+demo_input.json
+input_test.json
+
+# OS generated files
+.DS_Store
+Thumbs.db
