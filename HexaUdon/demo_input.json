@@ -1,0 +1,25 @@
+{
+  "startsAt": 1778227200,
+  "daySeconds": [5, 5],
+  "daySteps": [10, 10],
+  "map": {
+    "height": 4,
+    "width": 4,
+    "cells": [
+      [0, 0, 1, 2],
+      [0, 3, 1, 0],
+      [1, 0, 0, 0],
+      [2, 0, 0, 0]
+    ]
+  },
+  "spots": [
+    {"brand": 0, "pos": 1, "stocks": 4}
+  ],
+  "agents": [0, 5],
+  "fuelLimits": 20,
+  "players": 2,
+  "busyThreshold": 2,
+  "jammedThreshold": 4
+}
+{"endsAt": 1778227205, "day": 0, "agents": [{"kind": 0, "pos": 0, "fuel": 20}, {"kind": 0, "pos": 5, "fuel": 20}], "others": [], "traffics": []}
+{"endsAt": 1778227210, "day": 1, "agents": [{"kind": 0, "pos": 1, "fuel": 19}, {"kind": 0, "pos": 5, "fuel": 20}], "others": [], "traffics": []}
