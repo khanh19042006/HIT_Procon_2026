@@ -18,7 +18,7 @@ int main() {
 #endif
 
     std::cout << "========================================================================\n";
-    std::cout << "  HỆ THỐNG KIỂM THỬ & CONG CỤ DEBUG THEO DÕI AGENT (TEST VISUALIZER)   \n";
+    std::cout << "  HE THTONG KIEM THU & CONG CU DEBUG THEO DOI AGENT (TEST VISUALIZER)   \n";
     std::cout << "========================================================================\n\n";
 
     // 1. Đọc thông tin GameConfig từ stdin
@@ -33,14 +33,13 @@ int main() {
     std::cout << " -> Giới hạn bình nhiên liệu (Fuel)  : " << config.fuelLimit << "\n\n";
 
     Solver solver;
-    ActionValidator validator;
 
     // 2. Lựa chọn phân bổ loại xe Agent
     auto agentTypes = solver.decideAgentTypes(config);
     std::cout << "[BƯỚC 2 / STEP 2] Quyền phân bổ loại xe (Agent Types: 0 = Patrol, 1 = Supply):\n";
     for (size_t i = 0; i < agentTypes.size(); ++i) {
         std::cout << " -> Xe (Agent) [" << i << "]: " 
-                  << (agentTypes[i] == 0 ? "Xe Tuần Tra (Patrol Car - 巡回車)" : "Xe Tiếp Tế (Supply Car - 補給車)") << "\n";
+                  << (agentTypes[i] == 0 ? "Xe Tuần Tra (Patrol Car)" : "Xe Tiếp Tế (Supply Car)") << "\n";
     }
     std::cout << "\n";
 
@@ -64,7 +63,7 @@ int main() {
 
         // Tính toán kế hoạch nước đi
         auto actions = solver.solve(config, state, map);
-        bool isValid = validator.validate(config, state, actions);
+        bool isValid = ActionValidator::validate(config, state, actions, map);
 
         std::cout << "\n [KẾT QUẢ KẾ HOẠCH HÀNH ĐỘNG & KIỂM TRA / ACTION PLAN & VALIDATION]:\n";
         std::cout << "  * Kết quả kiểm tra (Validation): " 
@@ -73,14 +72,18 @@ int main() {
         for (size_t i = 0; i < actions.size(); ++i) {
             std::cout << "  * Xe (Agent) #" << i << " Lệnh (Actions): [";
             int stepSum = 0;
+            Position currentPos = map.posToCoordinate(state.agents[i].pos);
+            
             for (size_t k = 0; k < actions[i].size(); ++k) {
                 int act = actions[i][k];
                 if (act < 0) {
                     stepSum += (-act);
-                    std::cout << "Chờ (Wait " << -act << " steps)";
+                    std::cout << "Chờ(Wait " << -act << ")";
                 } else {
-                    stepSum += 1;
-                    std::cout << "Di chuyển hướng " << act << " (Move Dir " << act << ")";
+                    int tTime = map.getTravelTime(currentPos);
+                    stepSum += tTime;
+                    std::cout << "Đi_hướng_" << act << "(tốn " << tTime << " step)";
+                    currentPos = map.nextPosition(currentPos, act);
                 }
                 if (k + 1 < actions[i].size()) std::cout << ", ";
             }

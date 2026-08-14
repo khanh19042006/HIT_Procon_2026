@@ -16,9 +16,8 @@ int main() {
     // 2. Khởi tạo bản đồ (Map) với đầy đủ thông tin kích thước và địa hình (cells)
     Map map(config.map.height, config.map.width, config.map.cells);
 
-    // 3. Khởi tạo Bộ giải thuật (Solver) và Bộ kiểm tra tính hợp lệ (Validator)
+    // 3. Khởi tạo Bộ giải thuật (Solver)
     Solver solver;
-    ActionValidator validator;
 
     // 4. Quyết định loại xe (巡回車 / 補給車) và ghi output JSON cho Server
     auto agentTypes = solver.decideAgentTypes(config);
@@ -29,12 +28,12 @@ int main() {
         // Đọc trạng thái thay đổi của ngày thi đấu hiện tại (GameState)
         GameState state = JsonReader::readGameState();
 
-        // Gọi hàm giải thuật chính (Solver::solve) truyền vào toàn bộ dữ liệu cần thiết
+        // Gọi hàm giải thuật chính (map sẽ được cập nhật traffic bên trong)
         auto actions = solver.solve(config, state, map);
 
-        // Kiểm tra tính hợp lệ của Action Plan
-        if (!validator.validate(config, state, actions)) {
-            // Nếu bị vi phạm (sai số bước, ra ngoài bản đồ), tự động dùng kế hoạch an toàn (đứng yên)
+        // Kiểm tra tính hợp lệ của Action Plan (map đã có traffic mới nhất)
+        if (!ActionValidator::validate(config, state, actions, map)) {
+            // Nếu bị vi phạm, tự động dùng kế hoạch an toàn (đứng yên)
             std::cerr << "[WARNING] Action plan for day " << day << " was invalid! Using fallback action." << std::endl;
             actions = solver.createFallbackActions(config, state);
         }
