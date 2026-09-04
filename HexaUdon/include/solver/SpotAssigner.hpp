@@ -7,24 +7,26 @@
 #include <vector>
 #include <set>
 
+/**
+ * @brief SpotAssigner is now simplified — most logic moved to Solver's
+ * multi-spot chaining. This class provides utility functions for spot scoring.
+ */
 class SpotAssigner {
 public:
     /**
-     * @brief Assign spots to patrol agents, prioritizing brand diversity.
+     * @brief Score a spot for a patrol agent.
+     * Higher score = higher priority.
      *
-     * Scoring priority (per official rules):
-     *   1. Maximize unique brand types collected
-     *   2. Then maximize total servings
-     *
-     * @param agents       Current agent states
-     * @param spots        All spots from config
-     * @param map          Map with traffic info
-     * @return spotTarget[i] = index into config.spots for agent i to go to
-     *         -1 if agent is Supply car or no target available
+     * Factors:
+     * - Brand diversity bonus (new brand = +1000)
+     * - Stock availability
+     * - Distance cost (negative: closer is better)
      */
-    static std::vector<int> assignSpotsToAgents(
-        const std::vector<Agent>& agents,
+    static int scoreSpot(
+        int spotIdx,
         const std::vector<Spot>& spots,
-        const Map& map
+        int distanceSteps,
+        const std::set<int>& collectedBrands,
+        int remainingStock
     );
 };

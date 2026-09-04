@@ -2,88 +2,136 @@
 #include <queue>
 #include <algorithm>
 
-PathResult PathFinder::findPath(
-    Position start,
-    Position goal,
-    const Map& map,
-    int maxFuel
-) {
+// =============================================================================
+// SSSPResult::extractPath — Extract path from SSSP result to a specific goal
+// =============================================================================
+
+PathResult SSSPResult::extractPath(int goalPos) const {
     PathResult result;
 
-    if (start == goal) {
-        result.found = true;
-        return result;
-    }
-
-    int H = map.getHeight();
-    int W = map.getWidth();
-    int totalCells = H * W;
-
-    // Flat arrays for O(1) access — replaces std::map<pair, ...>
-    std::vector<int> dist(totalCells, INT_MAX);
-    std::vector<int> fuel(totalCells, INT_MAX);
-    std::vector<int> prevDir(totalCells, -1);
-    std::vector<int> prevCell(totalCells, -1);
-
-    // Priority queue: (total_steps, pos_index)
-    using PII = std::pair<int, int>;
-    std::priority_queue<PII, std::vector<PII>, std::greater<PII>> pq;
-
-    int startIdx = map.coordinateToPos(start);
-    int goalIdx = map.coordinateToPos(goal);
-
-    dist[startIdx] = 0;
-    fuel[startIdx] = 0;
-    pq.push({0, startIdx});
-
-    while (!pq.empty()) {
-        auto [d, u] = pq.top();
-        pq.pop();
-
-        if (d > dist[u]) continue; // Stale entry
-        if (u == goalIdx) break;   // Found shortest path
-
-        Position uPos = map.posToCoordinate(u);
-        int travelTime = map.getTravelTime(u);  // Steps to leave this cell
-        int fuelCost = map.getFuelCost(u);       // Fuel to leave this cell
-
-        for (int dir = 0; dir < 6; ++dir) {
-            Position nPos = map.nextPosition(uPos, dir);
-            if (!map.canMove(nPos)) continue;
-
-            int v = map.coordinateToPos(nPos);
-            int newDist = dist[u] + travelTime;
-            int newFuel = fuel[u] + fuelCost;
-
-            // Fuel constraint (only matters for patrol cars; supply pass INT_MAX)
-            if (newFuel > maxFuel) continue;
-
-            if (newDist < dist[v]) {
-                dist[v] = newDist;
-                fuel[v] = newFuel;
-                prevDir[v] = dir;
-                prevCell[v] = u;
-                pq.push({newDist, v});
-            }
-        }
-    }
-
-    // Trace back path
-    if (dist[goalIdx] == INT_MAX) {
+    if (goalPos < 0 || goalPos >= static_cast<int>(dist.size())) {
         result.found = false;
         return result;
     }
 
-    result.found = true;
-    result.totalSteps = dist[goalIdx];
-    result.totalFuel = fuel[goalIdx];
+    if (dist[goalPos] == INT_MAX) {
+        result.found = false;
+        return result;
+    }
 
-    int cur = goalIdx;
-    while (cur != startIdx) {
+    if (goalPos == sourcePos) {
+        result.found = true;
+        result.totalSteps = 0;
+        result.totalFuel = 0;
+        return result;
+    }
+
+    result.found = true;
+    result.totalSteps = dist[goalPos];
+    result.totalFuel = fuel[goalPos];
+
+    // Trace back path
+    int cur = goalPos;
+    while (cur != sourcePos) {
         result.directions.push_back(prevDir[cur]);
         cur = prevCell[cur];
     }
     std::reverse(result.directions.begin(), result.directions.end());
 
     return result;
+}
+
+// =============================================================================
+// Core Dijkstra implementation (shared by findPath and computeSSSP)
+// =============================================================================
+
+static SSSPResult runDijkstra(
+    Position source,
+    const Map& map,
+    int maxFuel,
+    int earlyStopPos = -1  // -1 = explore all, >= 0 = stop when this pos is reached
+) {
+    int H = map.getHeight();
+    int W = map.getWidth();
+    int totalCells = H * W;
+
+    SSSPResult sssp;
+    sssp.dist.assign(totalCells, INT_MAX);
+    sssp.fuel.assign(totalCells, INT_MAX);
+    sssp.prevDir.assign(totalCells, -1);
+    sssp.prevCell.assign(totalCells, -1);
+    sssp.sourcePos = map.coordinateToPos(source);
+
+    using PII = std::pair<int, int>;
+    std::priority_queue<PII, std::vector<PII>, std::greater<PII>> pq;
+
+    sssp.dist[sssp.sourcePos] = 0;
+    sssp.fuel[sssp.sourcePos] = 0;
+    pq.push({0, sssp.sourcePos});
+
+    while (!pq.empty()) {
+        auto [d, u] = pq.top();
+        pq.pop();
+
+        if (d > sssp.dist[u]) continue;
+        if (earlyStopPos >= 0 && u == earlyStopPos) break;
+
+        Position uPos = map.posToCoordinate(u);
+        int travelTime = map.getTravelTime(u);
+        int fuelCost = map.getFuelCost(u);
+
+        for (int dir = 0; dir < 6; ++dir) {
+            Position nPos = map.nextPosition(uPos, dir);
+            if (!map.canMove(nPos)) continue;
+
+            int v = map.coordinateToPos(nPos);
+            int newDist = sssp.dist[u] + travelTime;
+            int newFuel = sssp.fuel[u] + fuelCost;
+
+            if (newFuel > maxFuel) continue;
+
+            if (newDist < sssp.dist[v]) {
+                sssp.dist[v] = newDist;
+                sssp.fuel[v] = newFuel;
+                sssp.prevDir[v] = dir;
+                sssp.prevCell[v] = u;
+                pq.push({newDist, v});
+            }
+        }
+    }
+
+    return sssp;
+}
+
+// =============================================================================
+// PathFinder::findPath — Point-to-point shortest path (with early stop)
+// =============================================================================
+
+PathResult PathFinder::findPath(
+    Position start,
+    Position goal,
+    const Map& map,
+    int maxFuel
+) {
+    if (start == goal) {
+        PathResult result;
+        result.found = true;
+        return result;
+    }
+
+    int goalIdx = map.coordinateToPos(goal);
+    auto sssp = runDijkstra(start, map, maxFuel, goalIdx);
+    return sssp.extractPath(goalIdx);
+}
+
+// =============================================================================
+// PathFinder::computeSSSP — Full single-source shortest path (no early stop)
+// =============================================================================
+
+SSSPResult PathFinder::computeSSSP(
+    Position source,
+    const Map& map,
+    int maxFuel
+) {
+    return runDijkstra(source, map, maxFuel, -1);
 }

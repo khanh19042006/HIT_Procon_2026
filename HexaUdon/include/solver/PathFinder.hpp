@@ -13,23 +13,46 @@ struct PathResult {
     bool found = false;           // Whether a path was found
 };
 
+/**
+ * @brief Single-Source Shortest Path result.
+ * Contains distance/fuel/parent arrays for ALL cells from a single source.
+ */
+struct SSSPResult {
+    std::vector<int> dist;      // dist[pos] = shortest steps from source
+    std::vector<int> fuel;      // fuel[pos] = fuel consumed to reach pos
+    std::vector<int> prevDir;   // prevDir[pos] = direction taken to reach pos
+    std::vector<int> prevCell;  // prevCell[pos] = previous cell index
+    int sourcePos = -1;         // Source position index
+
+    // Extract path from source to goalPos
+    PathResult extractPath(int goalPos) const;
+};
+
 class PathFinder {
 public:
     /**
      * @brief Dijkstra pathfinding on hex grid with travel time weights.
-     *
-     * Edge weight = getTravelTime(current_pos) (steps consumed when moving FROM current cell).
-     * Fuel is tracked and constrained by maxFuel (set INT_MAX for supply cars).
-     *
-     * @param start     Starting coordinate
-     * @param goal      Goal coordinate
-     * @param map       Map with terrain + traffic info
-     * @param maxFuel   Maximum fuel available (INT_MAX for supply cars)
-     * @return PathResult with directions, total steps, total fuel, found flag
      */
     static PathResult findPath(
         Position start,
         Position goal,
+        const Map& map,
+        int maxFuel = INT_MAX
+    );
+
+    /**
+     * @brief Single-Source Shortest Path — run Dijkstra ONCE from source,
+     *        compute distances to ALL reachable cells.
+     *
+     * Much faster than calling findPath() N times for the same source.
+     *
+     * @param source   Starting position
+     * @param map      Map with terrain + traffic info
+     * @param maxFuel  Fuel limit (INT_MAX for supply cars)
+     * @return SSSPResult with dist/fuel/prev arrays for all cells
+     */
+    static SSSPResult computeSSSP(
+        Position source,
         const Map& map,
         int maxFuel = INT_MAX
     );
