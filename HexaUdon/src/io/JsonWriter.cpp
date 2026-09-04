@@ -4,12 +4,18 @@
 
 using json = nlohmann::json;
 
+std::string JsonWriter::agentTypesJson(const std::vector<int>& agentTypes) {
+    return json(agentTypes).dump();
+}
+
+std::string JsonWriter::actionsJson(const std::vector<std::vector<int>>& actions) {
+    return json(actions).dump();
+}
+
 void JsonWriter::writeAgentTypes(const std::vector<int>& agentTypes) {
-    json output = agentTypes;
-    std::cout << output.dump() << std::endl;
+    std::cout << agentTypesJson(agentTypes) << std::endl;
 }
 
 void JsonWriter::writeActions(const std::vector<std::vector<int>>& actions) {
-    json output = actions;
-    std::cout << output.dump() << std::endl;
+    std::cout << actionsJson(actions) << std::endl;
 }

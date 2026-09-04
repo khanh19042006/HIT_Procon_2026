@@ -1,7 +1,13 @@
 #!/bin/bash
 CXX=g++
 CXXFLAGS="-std=c++17 -Iinclude -Ithird_party"
-CORE_SRC="src/io/JsonReader.cpp src/io/JsonWriter.cpp src/map/Map.cpp src/solver/ActionValidator.cpp src/solver/PathFinder.cpp src/solver/Solver.cpp"
+CORE_SRC="src/io/ApiClient.cpp src/io/JsonReader.cpp src/io/JsonWriter.cpp src/map/Map.cpp src/solver/ActionValidator.cpp src/solver/PathFinder.cpp src/solver/Solver.cpp"
+
+if [ "$1" == "api" ]; then
+    echo "[BUILDING SOLVER API]..."
+    $CXX $CXXFLAGS src/solver_api_main.cpp src/solver/SolverApi.cpp $CORE_SRC -o solver_api
+    exit $?
+fi
 
 if [ "$1" == "test" ]; then
     echo "[BUILDING & RUNNING UNIT TESTS]..."

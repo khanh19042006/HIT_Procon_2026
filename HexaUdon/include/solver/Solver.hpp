@@ -27,6 +27,26 @@ public:
  */
 class Solver {
 public:
+    static constexpr double INF_COST = 1e18;
+
+    /**
+     * @brief Tinh chi phi tong hop cho mot o trong ban do.
+     * @param map Ban do hex.
+     * @param state Trang thai hien tai cua tran dau, chua thong tin traffic.
+     * @param pos Vi tri o theo chi so 1D.
+     * @return Chi phi tong hop cua o. Neu o khong the vao duoc thi tra ve INF_COST.
+     */
+    static double getCellCost(const Map& map, const GameState& state, int pos);
+
+    /**
+     * @brief Tinh chi phi tong hop cho mot o trong ban do.
+     * @param map Ban do hex.
+     * @param state Trang thai hien tai cua tran dau, chua thong tin traffic.
+     * @param pos Vi tri o theo toa do 2D (x, y).
+     * @return Chi phi tong hop cua o. Neu o khong the vao duoc thi tra ve INF_COST.
+     */
+    static double getCellCost(const Map& map, const GameState& state, Position pos);
+
     /**
      * @brief Wrapper goi sang AgentStrategy::decideAgentTypes
      */

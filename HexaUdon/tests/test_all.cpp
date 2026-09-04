@@ -89,10 +89,34 @@ void test_validator() {
     std::cout << "[PASS] ActionValidator tests passed!" << std::endl;
 }
 
+void test_solver_cell_cost() {
+    std::vector<std::vector<int>> cells = {
+        {0, 1, 0},
+        {2, 3, 0}
+    };
+    Map map(2, 3, cells);
+
+    GameState state;
+    state.traffics.push_back({1, 2});
+
+    double normalCost = Solver::getCellCost(map, state, 0);
+    double trafficCost = Solver::getCellCost(map, state, 1);
+    double blockedCost = Solver::getCellCost(map, state, Position{1, 1});
+    double outOfBoundsCost = Solver::getCellCost(map, state, Position{-1, 0});
+
+    assert(normalCost > 0.0);
+    assert(trafficCost > normalCost);
+    assert(blockedCost >= Solver::INF_COST);
+    assert(outOfBoundsCost >= Solver::INF_COST);
+
+    std::cout << "[PASS] Solver cell cost tests passed!" << std::endl;
+}
+
 int main() {
     test_map_and_geometry();
     test_pathfinder();
     test_validator();
+    test_solver_cell_cost();
     std::cout << "All unit tests completed successfully!" << std::endl;
     return 0;
 }

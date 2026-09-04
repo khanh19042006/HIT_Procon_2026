@@ -1,17 +1,45 @@
 #include <iostream>
+#include <chrono>
+#include <memory>
+#include <string>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+#include "io/ApiClient.hpp"
 #include "io/JsonReader.hpp"
 #include "io/JsonWriter.hpp"
 #include "map/Map.hpp"
 #include "solver/Solver.hpp"
 #include "solver/ActionValidator.hpp"
 
-int main() {
+int main(int argc, char** argv) {
     // Tối ưu hóa tốc độ nhập/xuất chuẩn
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(NULL);
 
-    // 1. Khởi tạo & nạp toàn bộ cấu hình trận đấu ban đầu (GameConfig) từ stdin
-    GameConfig config = JsonReader::readGameConfig();
+    const bool stdinMode = argc > 1 && std::string(argv[1]) == "--stdin";
+    std::unique_ptr<ApiClient> client;
+    if (!stdinMode) client = std::make_unique<ApiClient>(ApiClient::fromEnv());
+    GameConfig config;
+    if (stdinMode) {
+        config = JsonReader::readGameConfig();
+    } else {
+        while (true) {
+            try {
+                config = client->getConfig();
+                break;
+            } catch (const std::exception& error) {
+                std::cerr << "[API] Config is not available yet: " << error.what() << std::endl;
+#ifdef _WIN32
+                Sleep(1000);
+#else
+                usleep(1000000);
+#endif
+            }
+        }
+    }
 
     // 2. Khởi tạo bản đồ (Map) với đầy đủ thông tin kích thước và địa hình (cells)
     Map map(config.map.height, config.map.width, config.map.cells);
@@ -22,12 +50,29 @@ int main() {
 
     // 4. Quyết định loại xe (巡回車 / 補給車) và ghi output JSON cho Server
     auto agentTypes = solver.decideAgentTypes(config);
-    JsonWriter::writeAgentTypes(agentTypes);
+    if (stdinMode) JsonWriter::writeAgentTypes(agentTypes);
+    else client->submitAgentTypes(JsonWriter::agentTypesJson(agentTypes));
 
     // 5. Vòng lặp thực thi từng ngày thi đấu
+    int lastDay = -1;
     for (size_t day = 0; day < config.daySteps.size(); ++day) {
         // Đọc trạng thái thay đổi của ngày thi đấu hiện tại (GameState)
-        GameState state = JsonReader::readGameState();
+        GameState state;
+        if (stdinMode) {
+            state = JsonReader::readGameState();
+        } else {
+            do {
+                state = client->getStatus();
+                if (state.day <= lastDay) {
+#ifdef _WIN32
+                    Sleep(250);
+#else
+                    usleep(250000);
+#endif
+                }
+            } while (state.day <= lastDay);
+        }
+        lastDay = state.day;
 
         // Gọi hàm giải thuật chính (Solver::solve) truyền vào toàn bộ dữ liệu cần thiết
         auto actions = solver.solve(config, state, map);
@@ -40,7 +85,8 @@ int main() {
         }
 
         // Xuất kết quả Action Plan dạng JSON ra stdout cho Server
-        JsonWriter::writeActions(actions);
+        if (stdinMode) JsonWriter::writeActions(actions);
+        else client->submitActions(JsonWriter::actionsJson(actions));
     }
 
     return 0;

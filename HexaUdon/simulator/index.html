@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HexaUdon | Local Map Simulator</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <span class="brand-mark">HU</span>
+        <div><p class="eyebrow">LOCAL SIMULATOR</p><h1>HexaUdon map lab</h1></div>
+      </div>
+      <div class="top-actions">
+        <label class="file-button" for="json-file">Load JSON<input id="json-file" type="file" accept=".json,application/json"></label>
+        <button id="reset-button" class="button button-quiet">Reset</button>
+      </div>
+    </header>
+
+    <section class="status-strip" aria-label="Simulation status">
+      <div><span class="status-dot"></span><span id="run-status">Ready</span></div>
+      <div class="status-metric"><span>DAY</span><strong id="day-value">0 / 2</strong></div>
+      <div class="status-metric"><span>STEP</span><strong id="step-value">0 / 10</strong></div>
+      <div class="status-metric"><span>DEADLINE</span><strong id="deadline-value">1778227205</strong></div>
+    </section>
+
+    <section class="generator-panel">
+      <div class="generator-intro"><p class="eyebrow">GENERATOR & MAPS</p><h2>Build a practice field</h2><p>Generate a local map and tune the match before running a day.</p></div>
+      <div class="difficulty-block"><label for="difficulty">CHỌN ĐỘ KHÓ</label><select id="difficulty"><option value="easy">🟢 Dễ</option><option value="medium">🟡 Vừa</option><option value="hard">🔴 Khó</option></select><small id="difficulty-note">Ngẫu nhiên 10x10, 4 xe Agents, 6 tiệm Udon</small></div>
+      <div class="difficulty-summary"><span>CẤU HÌNH ĐỘ KHÓ HIỆN TẠI:</span><strong id="difficulty-summary">10 x 10 · 20 Fuel · 4 xe · 6 tiệm</strong><em id="terrain-summary">Địa hình ngẫu nhiên theo cấp độ</em></div>
+      <div class="settings-grid">
+        <label>WIDTH<input id="setting-width" type="number" min="4" max="16" value="10"></label>
+        <label>HEIGHT<input id="setting-height" type="number" min="4" max="16" value="10"></label>
+        <label>FUEL LIMIT<input id="setting-fuel" type="number" min="1" max="99" value="20"></label>
+        <label>BUSY THR.<input id="setting-busy" type="number" min="0" max="99" value="2"></label>
+        <label>JAM THR.<input id="setting-jam" type="number" min="0" max="99" value="4"></label>
+        <label>NUM PLAYERS<input id="setting-players" type="number" min="1" max="16" value="1"></label>
+      </div>
+      <div class="day-settings"><div class="day-settings-title"><span>Days</span><strong id="days-label">4 days</strong></div><div id="day-settings-list" class="day-settings-list"></div></div>
+      <button id="generate-button" class="button button-primary generate-button">Generate map</button>
+    </section>
+
+    <section class="workspace">
+      <aside class="sidebar sidebar-left">
+        <div class="panel-heading"><div><p class="eyebrow">FLEET</p><h2>Your agents</h2></div><span id="agent-count" class="count-badge">0</span></div>
+        <div id="agent-list" class="agent-list"></div>
+        <div class="days-panel"><div class="panel-heading compact"><div><p class="eyebrow">RUN ORDER</p><h3>Days</h3></div><span id="completed-days" class="count-badge">0/4</span></div><div id="run-days" class="run-days"></div></div>
+        <div class="legend-block">
+          <p class="eyebrow">TERRAIN</p>
+          <div class="legend-row"><i class="swatch terrain-flat"></i>Flat ground</div>
+          <div class="legend-row"><i class="swatch terrain-road"></i>Road</div>
+          <div class="legend-row"><i class="swatch terrain-mountain"></i>Mountain</div>
+          <div class="legend-row"><i class="swatch terrain-pond"></i>Pond / blocked</div>
+        </div>
+      </aside>
+
+      <section class="map-stage">
+        <div class="map-toolbar">
+          <div><p class="eyebrow">LIVE BOARD</p><h2>Hex field</h2></div>
+          <div class="toolbar-right"><span id="map-size">4 x 4</span><span class="live-pill"><span class="pulse"></span>C++ SOLVER API</span></div>
+        </div>
+        <div id="map-wrap" class="map-wrap" aria-label="Hex map simulation"></div>
+        <div class="controls">
+          <div class="control-group"><button id="play-button" class="button button-primary">Play simulation</button><button id="step-button" class="button button-secondary">Next step</button></div>
+          <div class="control-group"><button id="day-back" class="icon-button" title="Previous day">←</button><button id="day-forward" class="icon-button" title="Next day">→</button></div>
+        </div>
+        <div class="direction-pad">
+          <span class="direction-label">Move selected agent</span>
+          <div class="pad-grid">
+            <button data-direction="0">↖ <small>0</small></button><button data-direction="1">↗ <small>1</small></button><button data-direction="2">→ <small>2</small></button>
+            <button data-direction="5">← <small>5</small></button><button id="wait-button" class="wait-button">Wait <small>−1</small></button><button data-direction="3">↘ <small>3</small></button>
+            <span></span><button data-direction="4">↙ <small>4</small></button><span></span>
+          </div>
+        </div>
+        <section class="console-panel"><div class="panel-heading compact"><div><p class="eyebrow">CONSOLE</p><h3>Day telemetry</h3></div><button id="clear-console" class="text-button">Clear</button></div><pre id="day-console">Waiting for a day run...</pre></section>
+      </section>
+
+      <aside class="sidebar sidebar-right">
+        <div class="panel-heading"><div><p class="eyebrow">INSPECTOR</p><h2>Field data</h2></div></div>
+        <div id="inspector" class="inspector"></div>
+        <div class="event-section"><div class="panel-heading compact"><h3>Event log</h3><span id="event-count" class="count-badge">0</span></div><div id="event-log" class="event-log"></div></div>
+      </aside>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

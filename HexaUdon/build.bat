@@ -5,7 +5,13 @@ setlocal enabledelayedexpansion
 set CXX=g++
 set CXXFLAGS=-std=c++17 -Iinclude -Ithird_party
 
-set CORE_SRC=src/io/JsonReader.cpp src/io/JsonWriter.cpp src/map/Map.cpp src/solver/ActionValidator.cpp src/solver/PathFinder.cpp src/solver/Solver.cpp
+set CORE_SRC=src/io/ApiClient.cpp src/io/JsonReader.cpp src/io/JsonWriter.cpp src/map/Map.cpp src/solver/ActionValidator.cpp src/solver/PathFinder.cpp src/solver/Solver.cpp
+
+if "%1"=="api" (
+    echo [BUILDING SOLVER API]...
+    %CXX% %CXXFLAGS% src/solver_api_main.cpp src/solver/SolverApi.cpp %CORE_SRC% -o solver_api.exe
+    goto end
+)
 
 if "%1"=="runner" (
     echo [ĐANG BIÊN DỊCH VÀ CHẠY AGENT DEBUGGER RUNNER]...
