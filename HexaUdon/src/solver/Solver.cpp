@@ -9,39 +9,32 @@
 
 std::vector<int> AgentStrategy::decideAgentTypes(const GameConfig& config) {
     size_t n = config.initialAgentPositions.size();
-    int numSpots = static_cast<int>(config.spots.size());
-    int maxDaySteps = 0;
-    for (int ds : config.daySteps) {
-        maxDaySteps = std::max(maxDaySteps, ds);
+    int mapArea = config.map.height * config.map.width;
+
+    // === CORE PRINCIPLE: Maximize Patrol cars, minimize Supply ===
+    // Patrol cars score points by visiting spots.
+    // Supply cars score ZERO — they only refuel patrols.
+    // So: use as many Patrols as possible, only 1 Supply.
+
+    // If fuel is enormous relative to map → no supply needed at all
+    if (config.fuelLimit >= mapArea * 2) {
+        return std::vector<int>(n, 0); // All Patrol
     }
 
-    // Estimate: 1 patrol can visit ~maxDaySteps/8 spots per day (rough)
-    // Each move costs ~4 steps avg (2 steps travel + some overhead)
-    int spotsPerPatrolPerDay = std::max(1, maxDaySteps / 8);
-
-    // Patrols needed to cover all spots in 1 day
-    int patrolsNeeded = std::max(1, (numSpots + spotsPerPatrolPerDay - 1) / spotsPerPatrolPerDay);
-
-    // Always need at least 1 supply (unless fuel is enormous)
-    int mapArea = config.map.height * config.map.width;
+    // Default strategy: (N-1) Patrol + 1 Supply
     int supplyCount = 1;
 
-    // If fuel is very high compared to map → 0 supply might work
-    if (config.fuelLimit >= mapArea * 2) {
+    // Very small team (1-2 agents): no supply, all patrol
+    if (n <= 2) {
         supplyCount = 0;
-        patrolsNeeded = static_cast<int>(n);
-    } else {
-        patrolsNeeded = std::min(patrolsNeeded, static_cast<int>(n) - 1);
-        supplyCount = static_cast<int>(n) - patrolsNeeded;
-        supplyCount = std::max(1, supplyCount);
-
-        // Large map + low fuel → need 2 supply
-        if (n >= 6 && config.fuelLimit <= 15 && mapArea > 400) {
-            supplyCount = std::max(supplyCount, 2);
-        }
     }
 
-    // Cap: at least 1 patrol
+    // Large map + very low fuel + many agents → 2 supply
+    if (n >= 6 && config.fuelLimit <= 10 && mapArea > 400) {
+        supplyCount = 2;
+    }
+
+    // Safety: at least 1 patrol
     if (supplyCount >= static_cast<int>(n)) {
         supplyCount = static_cast<int>(n) - 1;
     }
