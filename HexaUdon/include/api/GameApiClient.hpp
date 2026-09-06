@@ -48,7 +48,11 @@ public:
     // Get last error message
     std::string getLastError() const { return lastError_; }
 
+    // Get last response body (for debugging)
+    std::string getLastResponse() const { return lastResponse_; }
+
 private:
     HttpClient http_;
     std::string lastError_;
+    std::string lastResponse_;
 };

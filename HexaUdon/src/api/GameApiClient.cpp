@@ -114,13 +114,20 @@ GameConfig GameApiClient::getMatchConfig(const std::string& matchId) {
 // =============================================================================
 bool GameApiClient::submitAgentTypes(const std::string& matchId, const std::vector<int>& types) {
     json body = types;
+    std::string payload = body.dump();
 
-    auto resp = http_.post("/api/game/matches/" + matchId + "/agents", body.dump());
+    std::cerr << "[DEBUG] POST /agents payload: " << payload << std::endl;
+
+    auto resp = http_.post("/api/game/matches/" + matchId + "/agents", payload);
+    std::cerr << "[DEBUG] POST /agents response (HTTP " << resp.statusCode << "): "
+              << resp.body.substr(0, 500) << std::endl;
+
     if (!resp.success) {
         lastError_ = "POST agents failed: HTTP " + std::to_string(resp.statusCode) +
                      " body: " + resp.body.substr(0, 200);
         return false;
     }
+    lastResponse_ = resp.body;
     return true;
 }
 
@@ -143,6 +150,14 @@ GameState GameApiClient::getMatchStatus(const std::string& matchId) {
 
         state.endsAt = j.value("endsAt", 0LL);
         state.day = j.value("day", -1);
+
+        // Debug: log raw fields
+        std::cerr << "[DEBUG] GET /status: day=" << state.day
+                  << " currentDay=" << j.value("currentDay", -1)
+                  << " totalDays=" << j.value("totalDays", -1)
+                  << " finished=" << j.value("finished", false)
+                  << " endsAt=" << state.endsAt
+                  << std::endl;
 
         if (j.contains("agents")) {
             for (const auto& a : j["agents"]) {
@@ -192,12 +207,36 @@ GameState GameApiClient::getMatchStatus(const std::string& matchId) {
 // =============================================================================
 bool GameApiClient::submitActions(const std::string& matchId, const std::vector<std::vector<int>>& actions) {
     json body = actions;
+    std::string payload = body.dump();
 
-    auto resp = http_.post("/api/game/matches/" + matchId + "/answer", body.dump());
+    std::cerr << "[DEBUG] POST /answer payload (" << payload.size() << " bytes): "
+              << payload.substr(0, 500) << std::endl;
+
+    auto resp = http_.post("/api/game/matches/" + matchId + "/answer", payload);
+    std::cerr << "[DEBUG] POST /answer response (HTTP " << resp.statusCode << "): "
+              << resp.body.substr(0, 500) << std::endl;
+
     if (!resp.success) {
         lastError_ = "POST answer failed: HTTP " + std::to_string(resp.statusCode) +
-                     " body: " + resp.body.substr(0, 200);
+                     " body: " + resp.body.substr(0, 500);
         return false;
     }
+
+    // CRITICAL: Server returns HTTP 200 but may include {"valid": false, "error": "..."}
+    lastResponse_ = resp.body;
+    try {
+        auto j = json::parse(resp.body);
+        if (j.contains("valid") && j["valid"].is_boolean() && !j["valid"].get<bool>()) {
+            std::string errMsg = j.value("error", "unknown");
+            int revision = j.value("revision", -1);
+            lastError_ = "Server REJECTED answer (revision=" + std::to_string(revision) +
+                         "): " + errMsg;
+            std::cerr << "[ERROR] " << lastError_ << std::endl;
+            return false;
+        }
+    } catch (...) {
+        // If body is not JSON or doesn't have 'valid', treat as success
+    }
+
     return true;
 }
