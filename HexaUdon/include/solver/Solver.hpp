@@ -3,7 +3,6 @@
 #include "model/GameConfig.hpp"
 #include "GameState.hpp"
 #include "map/Map.hpp"
-#include "solver/PathFinder.hpp"
 #include <vector>
 #include <set>
 
@@ -16,16 +15,21 @@ public:
 };
 
 /**
- * @brief Core solver — generates action plans for all agents each day.
+ * @brief Core solver — "Nhạc trưởng" điều phối các module.
  *
- * STATEFUL: maintains cross-day memory for brand tracking and daily stock.
+ * STATEFUL: duy trì bộ nhớ xuyên ngày (brand đã thu thập, stock, targets).
+ * Logic tính toán thực sự được ủy quyền cho:
+ *   - SpotScorer:     Chấm điểm & chọn Spot
+ *   - MoveSimulator:  Mô phỏng di chuyển
+ *   - PatrolPlanner:  Lập kế hoạch xe Tuần tra
+ *   - SupplyPlanner:  Lập kế hoạch xe Tiếp tế
  */
 class Solver {
 public:
     std::vector<int> decideAgentTypes(const GameConfig& config);
 
     /**
-     * @brief Main solver: generates action plans for the day.
+     * @brief Main solver: tạo kế hoạch hành động cho tất cả xe trong 1 ngày.
      */
     std::vector<std::vector<int>> solve(
         const GameConfig& config,
@@ -34,7 +38,7 @@ public:
     );
 
     /**
-     * @brief Fallback: all agents wait the entire day (safe plan)
+     * @brief Fallback: tất cả xe đứng yên cả ngày (kế hoạch an toàn)
      */
     std::vector<std::vector<int>> createFallbackActions(
         const GameConfig& config,
@@ -42,69 +46,14 @@ public:
     );
 
 private:
-    // === Cross-day state ===
-    std::set<int> collectedBrandsTotal_;   // All brands collected across entire match
+    // === Trạng thái xuyên trận ===
+    std::set<int> collectedBrandsTotal_;   // Brand đã thu thập toàn trận
     int currentDay_ = -1;
 
-    // === Daily state (reset each day) ===
-    std::vector<int> remainingStock_;                  // Stock left per spot today
-    std::vector<std::set<int>> visitedSpotsToday_;     // Spots visited today per patrol
+    // === Trạng thái hàng ngày (reset mỗi ngày) ===
+    std::vector<int> remainingStock_;                  // Stock còn lại mỗi Spot
+    std::vector<std::set<int>> visitedSpotsToday_;     // Spot đã ghé mỗi xe
+    std::vector<int> currentTargets_;                  // Spot mục tiêu mỗi xe (cho Supply)
 
     void resetDailyState(const GameConfig& config, int numAgents);
-
-    /**
-     * @brief Build multi-spot action plan for a patrol car.
-     * Keeps moving to next best spot until out of fuel or steps.
-     */
-    std::vector<int> buildMultiSpotPlan(
-        int patrolIdx,
-        const GameConfig& config,
-        const Map& map,
-        Position startPos,
-        int daySteps,
-        int availableFuel
-    );
-
-    /**
-     * @brief Find the best next spot for a patrol to visit.
-     * Priority: new brand > old brand, closer > farther, higher stock > lower.
-     * Returns spot index or -1 if no viable spot.
-     */
-    int findBestNextSpot(
-        int patrolIdx,
-        const GameConfig& config,
-        const Map& map,
-        Position currentPos,
-        int fuelRemaining,
-        int stepsRemaining
-    );
-
-    /**
-     * @brief Build action sequence from a path with travel time + fuel.
-     */
-    static std::vector<int> buildActionSequence(
-        const std::vector<int>& pathDirs,
-        const Map& map,
-        Position startPos,
-        int maxSteps,
-        int availableFuel,
-        bool isPatrol
-    );
-
-    /**
-     * @brief Find the patrol car index most in need of fuel.
-     */
-    static int findLowestFuelPatrol(
-        const std::vector<Agent>& agents,
-        int excludeIdx
-    );
-
-    /**
-     * @brief Find the target spot a patrol car is heading to.
-     * Used by supply car to do rendezvous.
-     */
-    int getPatrolTargetSpot(int patrolIdx) const;
-
-    // Target spots assigned to each patrol for current day
-    std::vector<int> currentTargets_;
 };

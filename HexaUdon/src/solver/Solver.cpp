@@ -1,10 +1,10 @@
 #include "solver/Solver.hpp"
+#include "solver/PatrolPlanner.hpp"
+#include "solver/SupplyPlanner.hpp"
 #include <iostream>
-#include <climits>
-#include <algorithm>
 
 // =============================================================================
-// AgentStrategy — Smart agent type allocation
+// AgentStrategy — Quyết định đội hình xe
 // =============================================================================
 
 std::vector<int> AgentStrategy::decideAgentTypes(const GameConfig& config) {
@@ -51,7 +51,7 @@ std::vector<int> Solver::decideAgentTypes(const GameConfig& config) {
 }
 
 // =============================================================================
-// Daily state reset
+// Reset trạng thái đầu ngày
 // =============================================================================
 
 void Solver::resetDailyState(const GameConfig& config, int numAgents) {
@@ -69,203 +69,7 @@ void Solver::resetDailyState(const GameConfig& config, int numAgents) {
 }
 
 // =============================================================================
-// Build action sequence from directions (respecting travel time + fuel)
-// =============================================================================
-
-std::vector<int> Solver::buildActionSequence(
-    const std::vector<int>& pathDirs,
-    const Map& map,
-    Position startPos,
-    int maxSteps,
-    int availableFuel,
-    bool isPatrol
-) {
-    std::vector<int> actions;
-    int stepsUsed = 0;
-    int fuelRemaining = availableFuel;
-    Position currentPos = startPos;
-
-    for (int dir : pathDirs) {
-        int travelTime = map.getTravelTime(currentPos);
-        int fuelCost = isPatrol ? map.getFuelCost(currentPos) : 0;
-
-        if (stepsUsed + travelTime > maxSteps) break;
-        if (isPatrol && fuelRemaining < fuelCost) break;
-
-        actions.push_back(dir);
-        stepsUsed += travelTime;
-        fuelRemaining -= fuelCost;
-        currentPos = map.nextPosition(currentPos, dir);
-    }
-
-    return actions;
-}
-
-// =============================================================================
-// Find patrol car with lowest fuel
-// =============================================================================
-
-int Solver::findLowestFuelPatrol(
-    const std::vector<Agent>& agents,
-    int excludeIdx
-) {
-    int bestIdx = -1;
-    int lowestFuel = INT_MAX;
-
-    for (size_t i = 0; i < agents.size(); ++i) {
-        if (static_cast<int>(i) == excludeIdx) continue;
-        if (agents[i].kind != 0) continue;
-
-        if (agents[i].fuel < lowestFuel) {
-            lowestFuel = agents[i].fuel;
-            bestIdx = static_cast<int>(i);
-        }
-    }
-    return bestIdx;
-}
-
-// =============================================================================
-// Get patrol's current target spot
-// =============================================================================
-
-int Solver::getPatrolTargetSpot(int patrolIdx) const {
-    if (patrolIdx >= 0 && patrolIdx < static_cast<int>(currentTargets_.size())) {
-        return currentTargets_[patrolIdx];
-    }
-    return -1;
-}
-
-// =============================================================================
-// Find the best NEXT spot for a patrol to visit
-// Priority: new brand > old brand, closer is better
-// =============================================================================
-
-int Solver::findBestNextSpot(
-    int patrolIdx,
-    const GameConfig& config,
-    const Map& map,
-    Position currentPos,
-    int fuelRemaining,
-    int stepsRemaining
-) {
-    int bestSpot = -1;
-    int bestScore = -1;
-    int bestCost = INT_MAX;
-
-    for (size_t si = 0; si < config.spots.size(); ++si) {
-        // Skip if already visited today by this patrol
-        if (visitedSpotsToday_[patrolIdx].count(static_cast<int>(si))) continue;
-
-        // Skip if no stock remaining
-        if (remainingStock_[si] <= 0) continue;
-
-        // Check reachability
-        Position spotPos = map.posToCoordinate(config.spots[si].pos);
-        auto path = PathFinder::findPath(currentPos, spotPos, map, fuelRemaining);
-        if (!path.found) continue;
-        if (path.totalSteps > stepsRemaining) continue;
-
-        // Score: new brand = 1000 bonus, otherwise 0
-        int score = 0;
-        int brand = config.spots[si].brand;
-        if (collectedBrandsTotal_.find(brand) == collectedBrandsTotal_.end()) {
-            score += 1000;  // Very high priority for new brand types
-        }
-
-        // Prefer closer spots (lower cost = better)
-        // Among same score, prefer closer
-        if (score > bestScore || (score == bestScore && path.totalSteps < bestCost)) {
-            bestScore = score;
-            bestCost = path.totalSteps;
-            bestSpot = static_cast<int>(si);
-        }
-    }
-
-    return bestSpot;
-}
-
-// =============================================================================
-// Build multi-spot action plan for a patrol car
-// =============================================================================
-
-std::vector<int> Solver::buildMultiSpotPlan(
-    int patrolIdx,
-    const GameConfig& config,
-    const Map& map,
-    Position startPos,
-    int daySteps,
-    int availableFuel
-) {
-    std::vector<int> allActions;
-    int stepsUsed = 0;
-    int fuelRemaining = availableFuel;
-    Position currentPos = startPos;
-
-    // Keep visiting spots until we can't anymore
-    while (true) {
-        int stepsRemaining = daySteps - stepsUsed;
-        if (stepsRemaining <= 0) break;
-        if (fuelRemaining <= 0) break;
-
-        // Find best next spot
-        int nextSpot = findBestNextSpot(
-            patrolIdx, config, map, currentPos, fuelRemaining, stepsRemaining
-        );
-
-        if (nextSpot < 0) break; // No more reachable spots
-
-        // Get path to next spot
-        Position spotPos = map.posToCoordinate(config.spots[nextSpot].pos);
-        auto path = PathFinder::findPath(currentPos, spotPos, map, fuelRemaining);
-
-        if (!path.found || path.totalSteps > stepsRemaining) break;
-
-        // Build action sequence for this leg
-        auto legActions = buildActionSequence(
-            path.directions, map, currentPos,
-            stepsRemaining, fuelRemaining, true
-        );
-
-        // Simulate the leg to update position/fuel
-        Position simPos = currentPos;
-        int simSteps = 0;
-        int simFuel = fuelRemaining;
-        for (int act : legActions) {
-            if (act >= 0 && act <= 5) {
-                int tt = map.getTravelTime(simPos);
-                int fc = map.getFuelCost(simPos);
-                simSteps += tt;
-                simFuel -= fc;
-                simPos = map.nextPosition(simPos, act);
-            }
-        }
-
-        // Append leg actions
-        allActions.insert(allActions.end(), legActions.begin(), legActions.end());
-        stepsUsed += simSteps;
-        fuelRemaining = simFuel;
-        currentPos = simPos;
-
-        // Mark spot as visited + update stock + track brand
-        visitedSpotsToday_[patrolIdx].insert(nextSpot);
-        remainingStock_[nextSpot]--;
-        collectedBrandsTotal_.insert(config.spots[nextSpot].brand);
-
-        // Update current target for supply car rendezvous
-        currentTargets_[patrolIdx] = nextSpot;
-    }
-
-    // Pad with wait for remaining steps
-    int remaining = daySteps - stepsUsed;
-    if (remaining > 0) {
-        allActions.push_back(-remaining);
-    }
-
-    return allActions;
-}
-
-// =============================================================================
-// MAIN SOLVER — Generate action plans for all agents in a day
+// MAIN SOLVER — Nhạc trưởng điều phối các module
 // =============================================================================
 
 std::vector<std::vector<int>> Solver::solve(
@@ -283,86 +87,48 @@ std::vector<std::vector<int>> Solver::solve(
 
     if (daySteps <= 0) return actions;
 
-    // 1. Update traffic status on the map
+    // 1. Cập nhật giao thông trên bản đồ
     map.updateTraffic(state.traffics);
 
-    // 2. Reset daily state (stock replenishes, visited resets)
+    // 2. Reset trạng thái nếu là ngày mới
     if (state.day != currentDay_) {
         resetDailyState(config, numAgents);
         currentDay_ = state.day;
     }
 
-    // 3. Generate action plans — Patrol cars FIRST (so supply knows targets)
+    // 3. Lập kế hoạch cho xe TUẦN TRA (PatrolPlanner)
+    //    Tính trước để xe Supply biết mục tiêu của Patrol
     for (int i = 0; i < numAgents; ++i) {
         const Agent& agent = state.agents[i];
-        if (agent.kind != 0) continue; // Skip supply cars for now
+        if (agent.kind != 0) continue; // Bỏ qua xe Supply
 
         Position agentPos = map.posToCoordinate(agent.pos);
 
-        // Multi-spot chaining: visit as many spots as possible
-        actions[i] = buildMultiSpotPlan(
-            i, config, map, agentPos, daySteps, agent.fuel
+        actions[i] = PatrolPlanner::planDay(
+            config, map, agentPos, daySteps, agent.fuel,
+            remainingStock_,
+            visitedSpotsToday_[i],
+            collectedBrandsTotal_,
+            currentTargets_[i]
         );
     }
 
-    // 4. Generate action plans — Supply cars (AFTER patrols, so we know targets)
+    // 4. Lập kế hoạch cho xe TIẾP TẾ (SupplyPlanner)
     for (int i = 0; i < numAgents; ++i) {
         const Agent& agent = state.agents[i];
-        if (agent.kind != 1) continue; // Skip patrol cars
+        if (agent.kind != 1) continue; // Bỏ qua xe Patrol
 
-        Position agentPos = map.posToCoordinate(agent.pos);
-
-        // Find patrol with lowest fuel
-        int targetPatrol = findLowestFuelPatrol(state.agents, i);
-
-        if (targetPatrol >= 0) {
-            // PROACTIVE: Go to patrol's TARGET SPOT (rendezvous point)
-            // instead of patrol's current position
-            Position targetPos;
-            int patrolTarget = getPatrolTargetSpot(targetPatrol);
-
-            if (patrolTarget >= 0) {
-                // Go to the spot the patrol is heading to
-                targetPos = map.posToCoordinate(config.spots[patrolTarget].pos);
-            } else {
-                // Fallback: go to patrol's current position
-                targetPos = map.posToCoordinate(state.agents[targetPatrol].pos);
-            }
-
-            auto pathResult = PathFinder::findPath(agentPos, targetPos, map, INT_MAX);
-
-            if (pathResult.found) {
-                auto legActions = buildActionSequence(
-                    pathResult.directions, map, agentPos,
-                    daySteps, INT_MAX, false
-                );
-                // Calculate steps used in leg
-                int stepsUsed = 0;
-                Position simPos = agentPos;
-                for (int act : legActions) {
-                    if (act >= 0 && act <= 5) {
-                        stepsUsed += map.getTravelTime(simPos);
-                        simPos = map.nextPosition(simPos, act);
-                    }
-                }
-                actions[i] = legActions;
-                int remaining = daySteps - stepsUsed;
-                if (remaining > 0) {
-                    actions[i].push_back(-remaining);
-                }
-            } else {
-                actions[i] = {-daySteps};
-            }
-        } else {
-            actions[i] = {-daySteps};
-        }
+        actions[i] = SupplyPlanner::planDay(
+            config, map, agent, state.agents, i,
+            daySteps, currentTargets_
+        );
     }
 
     return actions;
 }
 
 // =============================================================================
-// Fallback — All agents wait entire day
+// Fallback — Tất cả xe đứng yên cả ngày
 // =============================================================================
 
 std::vector<std::vector<int>> Solver::createFallbackActions(

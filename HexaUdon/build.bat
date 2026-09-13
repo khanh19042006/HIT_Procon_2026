@@ -5,7 +5,7 @@ setlocal enabledelayedexpansion
 set CXX=g++
 set CXXFLAGS=-std=c++17 -O2 -Iinclude -Ithird_party
 
-set CORE_SRC=src/io/JsonReader.cpp src/io/JsonWriter.cpp src/map/Map.cpp src/solver/ActionValidator.cpp src/solver/PathFinder.cpp src/solver/Solver.cpp src/solver/SpotAssigner.cpp
+set CORE_SRC=src/io/JsonReader.cpp src/io/JsonWriter.cpp src/map/Map.cpp src/solver/ActionValidator.cpp src/solver/PathFinder.cpp src/solver/SpotScorer.cpp src/solver/MoveSimulator.cpp src/solver/PatrolPlanner.cpp src/solver/SupplyPlanner.cpp src/solver/Solver.cpp
 set API_SRC=src/api/HttpClient.cpp src/api/GameApiClient.cpp
 
 if "%1"=="runner" (
