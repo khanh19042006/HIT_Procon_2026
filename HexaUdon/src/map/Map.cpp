@@ -62,9 +62,11 @@ Position Map::nextPosition(Position current, int direction) const {
         return current;
     }
 
-    bool isOdd = (current.y % 2 != 0);
-    int nx = current.x + (isOdd ? dx_odd[direction] : dx_even[direction]);
-    int ny = current.y + (isOdd ? dy_odd[direction] : dy_even[direction]);
+    // Offset coordinates: EVEN rows are shifted RIGHT (even-r convention)
+    // Server uses this convention: even-row cells have different diagonal neighbors
+    bool isEvenRow = (current.y % 2 == 0);
+    int nx = current.x + (isEvenRow ? dx_odd[direction] : dx_even[direction]);
+    int ny = current.y + (isEvenRow ? dy_odd[direction] : dy_even[direction]);
 
     return {nx, ny};
 }

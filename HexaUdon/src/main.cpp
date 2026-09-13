@@ -67,28 +67,68 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
     std::cout << "\n";
 
     // --- Step 3: Main loop — poll status and submit actions for each day ---
-    std::cout << "[3/4] Bat dau vong lap thi dau...\n\n";
+    std::cout << "[3/4] Bat dau vong lap thi dau...\n";
+    std::cout << "  (Dang cho admin Start match...)\n\n";
 
     int lastDay = -1;
     int totalDays = static_cast<int>(config.daySteps.size());
+    int retryCount = 0;
+    const int MAX_RETRIES = 300; // 5 minutes max wait
 
     while (true) {
         // Poll match status
         GameState state = api.getMatchStatus(matchId);
 
         if (state.day < 0) {
-            // Not started yet or error — wait and retry
-            std::cout << "  [Cho] Tran dau chua bat dau hoac loi... thu lai sau 2 giay\n";
+            // Parse error or server down — wait and retry
+            std::cout << "  [Cho] Khong doc duoc status... thu lai sau 2 giay\n";
             std::cout << "        (" << api.getLastError() << ")\n";
             std::this_thread::sleep_for(std::chrono::seconds(2));
+            retryCount++;
+            if (retryCount > MAX_RETRIES) {
+                std::cerr << "[LOI] Qua thoi gian cho. Thoat.\n";
+                break;
+            }
             continue;
         }
 
-        // Check if match ended
+        // Check if match ended (finished flag or day >= totalDays)
         if (state.day >= totalDays) {
             std::cout << "\n[4/4] Tran dau da ket thuc! (day=" << state.day << " >= " << totalDays << ")\n";
             break;
         }
+
+        // Check if match is actually running (agents must be non-empty)
+        if (state.agents.empty()) {
+            // Match is in "agent_select" phase — not started yet
+            if (retryCount % 10 == 0) { // Print every 10 polls (~5s)
+                std::cout << "  [Cho] Match chua bat dau (khong co agents). Cho admin click 'Start'...\n";
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            retryCount++;
+            if (retryCount > MAX_RETRIES) {
+                std::cerr << "[LOI] Qua thoi gian cho match start. Thoat.\n";
+                break;
+            }
+            continue;
+        }
+
+        // Check if endsAt is valid (match must be running, not just created)
+        if (state.endsAt <= 0) {
+            if (retryCount % 10 == 0) {
+                std::cout << "  [Cho] Match chua running (endsAt=0). Cho admin click 'Start'...\n";
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            retryCount++;
+            if (retryCount > MAX_RETRIES) {
+                std::cerr << "[LOI] Qua thoi gian cho match running. Thoat.\n";
+                break;
+            }
+            continue;
+        }
+
+        // Reset retry counter once match is actually running
+        retryCount = 0;
 
         // Skip if we already submitted for this day
         if (state.day == lastDay) {
@@ -96,10 +136,11 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
             continue;
         }
 
-        // New day!
+        // === NEW DAY! Match is running, agents available ===
+        int daySteps = config.daySteps[state.day];
         std::cout << "------------------------------------------------------------------------\n";
         std::cout << "  NGAY " << state.day << "/" << totalDays - 1
-                  << " (Steps: " << config.daySteps[state.day] << ")\n";
+                  << " (Steps: " << daySteps << ")\n";
         std::cout << "------------------------------------------------------------------------\n";
 
         // Print agent states
@@ -115,6 +156,12 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
 
         // Solve
         auto actions = solver.solve(config, state, map);
+
+        // Sanity check: actions must not be empty
+        if (actions.empty() || actions.size() != state.agents.size()) {
+            std::cerr << "  [LOI] Solver tra ve actions rong hoac sai so luong!\n";
+            actions = solver.createFallbackActions(config, state);
+        }
 
         // Validate
         if (!ActionValidator::validate(config, state, actions, map)) {
@@ -139,9 +186,17 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
             std::cout << "  -> DA GUI THANH CONG!\n\n";
             lastDay = state.day;
         } else {
-            std::cerr << "  [LOI] Gui that bai: " << api.getLastError() << "\n";
-            std::cerr << "  -> Thu lai sau 1 giay...\n\n";
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::string err = api.getLastError();
+            std::cerr << "  [LOI] Gui that bai: " << err << "\n";
+
+            // If "Match is not running", wait longer
+            if (err.find("not running") != std::string::npos) {
+                std::cerr << "  -> Match chua san sang, cho 3 giay...\n\n";
+                std::this_thread::sleep_for(std::chrono::seconds(3));
+            } else {
+                std::cerr << "  -> Thu lai sau 1 giay...\n\n";
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
             continue; // Retry this day
         }
     }
