@@ -16,7 +16,9 @@
 5. [MoveSimulator — Mô phỏng di chuyển](#5-movesimulator--mô-phỏng-di-chuyển)
 6. [PathFinder — Tìm đường Dijkstra](#6-pathfinder--tìm-đường-dijkstra)
 7. [ActionValidator — Kiểm tra tính hợp lệ](#7-actionvalidator--kiểm-tra-tính-hợp-lệ)
-8. [Sơ đồ quan hệ giữa các Class](#8-sơ-đồ-quan-hệ-giữa-các-class)
+8. [DiaryWriter — Ghi nhật ký hành trình](#8-diarywriter--ghi-nhật-ký-hành-trình)
+9. [Hàm test/debug](#9-hàm-testdebug)
+10. [Sơ đồ quan hệ giữa các Class](#10-sơ-đồ-quan-hệ-giữa-các-class)
 
 ---
 
@@ -505,7 +507,53 @@ return TRUE
 
 ---
 
-## 8. Sơ đồ quan hệ giữa các Class
+## 8. DiaryWriter — Ghi nhật ký hành trình
+
+**File:** `include/io/DiaryWriter.hpp` / `src/io/DiaryWriter.cpp`
+
+**Vai trò:** Ghi lại kế hoạch đã được server chấp nhận thành Markdown. Module
+này thuộc lớp `io`, chỉ định dạng dữ liệu và ghi file; không thay đổi trạng thái
+Solver hoặc action của xe.
+
+### `DiaryWriter::writeDay(...) → bool`
+
+Tạo thư mục `diary/<matchId>/` nếu chưa có và ghi file
+`day_<day>.md`. Mỗi file gồm:
+
+- số step và loại kế hoạch (`Solver` hoặc `Fallback`);
+- từng xe, loại xe, vị trí và fuel đầu ngày;
+- Spot mục tiêu mà Solver đã chọn;
+- bảng từng action, khoảng step bị tiêu thụ, vị trí sau action và fuel còn lại;
+- mảng action hoàn chỉnh cuối ngày.
+
+Hàm được gọi **sau khi** `submitActions()` thành công, vì vậy diary chỉ ghi
+kế hoạch thực sự đã gửi được server chấp nhận. Action của xe Supply lấy từ
+đúng điểm hẹn mà `SupplyPlanner` đã chọn, không tự tính lại trong module ghi
+file.
+
+### Các hàm định dạng nội bộ
+
+`agentKindName()`, `spotName()`, `actionName()`, `formatActions()` và
+`writeAgentTimeline()` chỉ phục vụ việc chuyển dữ liệu kế hoạch thành Markdown.
+Chúng không tham gia chiến thuật và không được gọi từ Solver.
+
+## 9. Hàm test/debug
+
+Các hàm trong mục này chỉ có mục đích kiểm tra hoặc quan sát khi phát triển,
+không phải logic thi đấu và không được dùng để thay đổi kế hoạch gửi server.
+
+### `GameApiClient::getMatchStatus()` - debug response
+
+Dòng in `[DEBUG] GET /status: ...` chỉ hiển thị các trường raw server trả về
+để đối chiếu `day`, `currentDay`, `totalDays`, `finished` và `endsAt`. Đây là
+nhật ký console phục vụ debug API, khác với diary Markdown của `DiaryWriter`.
+
+### `tests/test_all.cpp` và `tests/test_runner.cpp`
+
+Các hàm trong hai file này chỉ dùng để chạy unit test hoặc chạy thử solver với
+input mẫu. Chúng không thuộc luồng thi đấu API và không tạo diary trận đấu.
+
+## 10. Sơ đồ quan hệ giữa các Class
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

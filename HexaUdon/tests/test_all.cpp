@@ -8,7 +8,7 @@
 #include "solver/PathFinder.hpp"
 #include "solver/ActionValidator.hpp"
 #include "solver/Solver.hpp"
-#include "solver/SpotAssigner.hpp"
+#include "solver\SpotScorer.hpp"
 
 // =============================================================================
 // Test 1: Map basics and hex geometry
@@ -269,7 +269,7 @@ void test_solver_with_supply() {
 }
 
 // =============================================================================
-// Test 9: SpotAssigner scoring
+// Test 9: SpotScorer scoring
 // =============================================================================
 void test_spot_scoring() {
     std::vector<Spot> spots = {
@@ -280,15 +280,15 @@ void test_spot_scoring() {
     std::set<int> collected = {0}; // brand 0 already collected
 
     // Spot 1 (brand 1, new) should score higher than spot 0 (brand 0, old)
-    int score0 = SpotAssigner::scoreSpot(0, spots, 10, collected, 2);
-    int score1 = SpotAssigner::scoreSpot(1, spots, 10, collected, 1);
+    int score0 = SpotScorer::scoreSpot(spots[0].brand, 10, collected, 2);
+    int score1 = SpotScorer::scoreSpot(spots[1].brand, 10, collected, 1);
     assert(score1 > score0); // New brand bonus outweighs stock
 
     // Zero stock should return -1
-    int scoreNoStock = SpotAssigner::scoreSpot(0, spots, 10, collected, 0);
+    int scoreNoStock = SpotScorer::scoreSpot(spots[0].brand, 10, collected, 0);
     assert(scoreNoStock == -1);
 
-    std::cout << "[PASS] SpotAssigner scoring test passed!" << std::endl;
+    std::cout << "[PASS] SpotScorer scoring test passed!" << std::endl;
 }
 
 // =============================================================================

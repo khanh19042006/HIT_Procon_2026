@@ -46,15 +46,16 @@ HttpClient::HttpClient(const std::string& baseUrl) : baseUrl_(baseUrl) {
     parseUrl(baseUrl, host_, port_, useHttps_);
 
     std::wstring wAgent = L"HexaUdon/2.0";
-    hSession_ = WinHttpOpen(wAgent.c_str(),
-                            WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-                            WINHTTP_NO_PROXY_NAME,
-                            WINHTTP_NO_PROXY_BYPASS, 0);
+    hSession_ = InternetOpenW(wAgent.c_str(),
+                              INTERNET_OPEN_TYPE_PRECONFIG,
+                              NULL,
+                              NULL, 0);
 
     if (hSession_) {
         std::wstring wHost = toWide(host_);
-        hConnect_ = WinHttpConnect(hSession_, wHost.c_str(),
-                                   static_cast<INTERNET_PORT>(port_), 0);
+        hConnect_ = InternetConnectW(hSession_, wHost.c_str(),
+                                     static_cast<INTERNET_PORT>(port_),
+                                     NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
     }
 
     // Default headers
@@ -63,8 +64,8 @@ HttpClient::HttpClient(const std::string& baseUrl) : baseUrl_(baseUrl) {
 }
 
 HttpClient::~HttpClient() {
-    if (hConnect_) WinHttpCloseHandle(hConnect_);
-    if (hSession_) WinHttpCloseHandle(hSession_);
+    if (hConnect_) InternetCloseHandle(hConnect_);
+    if (hSession_) InternetCloseHandle(hSession_);
 }
 
 void HttpClient::setHeader(const std::string& key, const std::string& value) {
@@ -105,63 +106,62 @@ HttpResponse HttpClient::request(const std::string& method, const std::string& p
     std::wstring wPath = toWide(path);
     std::wstring wMethod = toWide(method);
 
-    DWORD flags = useHttps_ ? WINHTTP_FLAG_SECURE : 0;
-    HINTERNET hRequest = WinHttpOpenRequest(
+    DWORD flags = useHttps_ ? INTERNET_FLAG_SECURE : 0;
+    HINTERNET hRequest = HttpOpenRequestW(
         hConnect_, wMethod.c_str(), wPath.c_str(),
-        NULL, WINHTTP_NO_REFERER,
-        WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+        NULL, NULL, NULL, flags, 0);
 
     if (!hRequest) {
-        response.error = "Failed to open request";
+        response.error = "Failed to open request, error: " +
+                         std::to_string(GetLastError());
         return response;
     }
 
     // Disable certificate validation for development/testing
     if (useHttps_) {
         DWORD dwFlags = SECURITY_FLAG_IGNORE_UNKNOWN_CA |
-                        SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE |
+                SECURITY_FLAG_IGNORE_WRONG_USAGE |
                         SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
                         SECURITY_FLAG_IGNORE_CERT_DATE_INVALID;
-        WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, &dwFlags, sizeof(dwFlags));
+        InternetSetOptionW(hRequest, INTERNET_OPTION_SECURITY_FLAGS,
+                   &dwFlags, sizeof(dwFlags));
     }
 
     // Set headers
     for (const auto& h : headers_) {
         std::wstring header = toWide(h.first + ": " + h.second);
-        WinHttpAddRequestHeaders(hRequest, header.c_str(), (DWORD)-1L,
-                                 WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE);
+        HttpAddRequestHeadersW(hRequest, header.c_str(), (DWORD)-1L,
+                               HTTP_ADDREQ_FLAG_ADD | HTTP_ADDREQ_FLAG_REPLACE);
     }
 
     // Send request
     BOOL bResult;
     if (!body.empty()) {
-        bResult = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                                     (LPVOID)body.c_str(), (DWORD)body.size(),
-                                     (DWORD)body.size(), 0);
+        bResult = HttpSendRequestW(hRequest, NULL, 0,
+                                   (LPVOID)body.c_str(), (DWORD)body.size());
     } else {
-        bResult = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-                                     WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+        bResult = HttpSendRequestW(hRequest, NULL, 0, NULL, 0);
     }
 
     if (!bResult) {
         DWORD err = GetLastError();
-        response.error = "WinHttpSendRequest failed, error: " + std::to_string(err);
-        WinHttpCloseHandle(hRequest);
+        response.error = "HttpSendRequest failed, error: " + std::to_string(err);
+        InternetCloseHandle(hRequest);
         return response;
     }
 
-    bResult = WinHttpReceiveResponse(hRequest, NULL);
     if (!bResult) {
-        response.error = "WinHttpReceiveResponse failed";
-        WinHttpCloseHandle(hRequest);
+        response.error = "HttpSendRequest failed, error: " +
+                         std::to_string(GetLastError());
+        InternetCloseHandle(hRequest);
         return response;
     }
 
     // Get status code
     DWORD statusCode = 0;
     DWORD dwSize = sizeof(statusCode);
-    WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                        NULL, &statusCode, &dwSize, NULL);
+    HttpQueryInfoW(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER,
+                   &statusCode, &dwSize, NULL);
     response.statusCode = static_cast<int>(statusCode);
 
     // Read response body
@@ -169,11 +169,21 @@ HttpResponse HttpClient::request(const std::string& method, const std::string& p
     DWORD bytesAvailable = 0;
     do {
         bytesAvailable = 0;
-        WinHttpQueryDataAvailable(hRequest, &bytesAvailable);
+        if (!InternetQueryDataAvailable(hRequest, &bytesAvailable, 0, 0)) {
+            response.error = "InternetQueryDataAvailable failed, error: " +
+                             std::to_string(GetLastError());
+            InternetCloseHandle(hRequest);
+            return response;
+        }
         if (bytesAvailable > 0) {
             std::vector<char> buffer(bytesAvailable + 1, 0);
             DWORD bytesRead = 0;
-            WinHttpReadData(hRequest, buffer.data(), bytesAvailable, &bytesRead);
+            if (!InternetReadFile(hRequest, buffer.data(), bytesAvailable, &bytesRead)) {
+                response.error = "InternetReadFile failed, error: " +
+                                 std::to_string(GetLastError());
+                InternetCloseHandle(hRequest);
+                return response;
+            }
             responseBody.append(buffer.data(), bytesRead);
         }
     } while (bytesAvailable > 0);
@@ -181,6 +191,6 @@ HttpResponse HttpClient::request(const std::string& method, const std::string& p
     response.body = responseBody;
     response.success = (statusCode >= 200 && statusCode < 300);
 
-    WinHttpCloseHandle(hRequest);
+    InternetCloseHandle(hRequest);
     return response;
 }

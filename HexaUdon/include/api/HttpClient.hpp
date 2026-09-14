@@ -6,8 +6,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <winhttp.h>
-#pragma comment(lib, "winhttp.lib")
+#include <wininet.h>
+#pragma comment(lib, "wininet.lib")
 #endif
 
 /**

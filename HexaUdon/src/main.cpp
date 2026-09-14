@@ -1,14 +1,12 @@
 #include <iostream>
 #include <string>
-#include <thread>
-#include <chrono>
-
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
 #include "io/JsonReader.hpp"
 #include "io/JsonWriter.hpp"
+#include "io/DiaryWriter.hpp"
 #include "map/Map.hpp"
 #include "solver/Solver.hpp"
 #include "solver/ActionValidator.hpp"
@@ -83,7 +81,7 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
             // Parse error or server down — wait and retry
             std::cout << "  [Cho] Khong doc duoc status... thu lai sau 2 giay\n";
             std::cout << "        (" << api.getLastError() << ")\n";
-            std::this_thread::sleep_for(std::chrono::seconds(2));
+            Sleep(2000);
             retryCount++;
             if (retryCount > MAX_RETRIES) {
                 std::cerr << "[LOI] Qua thoi gian cho. Thoat.\n";
@@ -104,7 +102,7 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
             if (retryCount % 10 == 0) { // Print every 10 polls (~5s)
                 std::cout << "  [Cho] Match chua bat dau (khong co agents). Cho admin click 'Start'...\n";
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            Sleep(500);
             retryCount++;
             if (retryCount > MAX_RETRIES) {
                 std::cerr << "[LOI] Qua thoi gian cho match start. Thoat.\n";
@@ -118,7 +116,7 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
             if (retryCount % 10 == 0) {
                 std::cout << "  [Cho] Match chua running (endsAt=0). Cho admin click 'Start'...\n";
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            Sleep(500);
             retryCount++;
             if (retryCount > MAX_RETRIES) {
                 std::cerr << "[LOI] Qua thoi gian cho match running. Thoat.\n";
@@ -132,7 +130,7 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
 
         // Skip if we already submitted for this day
         if (state.day == lastDay) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            Sleep(500);
             continue;
         }
 
@@ -156,17 +154,20 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
 
         // Solve
         auto actions = solver.solve(config, state, map);
+        bool usedFallback = false;
 
         // Sanity check: actions must not be empty
         if (actions.empty() || actions.size() != state.agents.size()) {
             std::cerr << "  [LOI] Solver tra ve actions rong hoac sai so luong!\n";
             actions = solver.createFallbackActions(config, state);
+            usedFallback = true;
         }
 
         // Validate
         if (!ActionValidator::validate(config, state, actions, map)) {
             std::cerr << "  [CANH BAO] Action KHONG HOP LE! Dung fallback.\n";
             actions = solver.createFallbackActions(config, state);
+            usedFallback = true;
         } else {
             std::cout << "  -> Ket qua: HOP LE\n";
         }
@@ -184,6 +185,12 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
         // Submit
         if (api.submitActions(matchId, actions)) {
             std::cout << "  -> DA GUI THANH CONG!\n\n";
+            if (!DiaryWriter::writeDay(
+                    "diary", matchId, state.day, daySteps,
+                    config, state, map, solver, actions, usedFallback)) {
+                std::cerr << "  [CANH BAO] Khong ghi duoc diary cho ngay "
+                          << state.day << "\n";
+            }
             lastDay = state.day;
         } else {
             std::string err = api.getLastError();
@@ -192,10 +199,10 @@ int runApiMode(const std::string& serverUrl, const std::string& token, const std
             // If "Match is not running", wait longer
             if (err.find("not running") != std::string::npos) {
                 std::cerr << "  -> Match chua san sang, cho 3 giay...\n\n";
-                std::this_thread::sleep_for(std::chrono::seconds(3));
+                Sleep(3000);
             } else {
                 std::cerr << "  -> Thu lai sau 1 giay...\n\n";
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                Sleep(1000);
             }
             continue; // Retry this day
         }

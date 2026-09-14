@@ -50,6 +50,13 @@ std::vector<int> Solver::decideAgentTypes(const GameConfig& config) {
     return AgentStrategy::decideAgentTypes(config);
 }
 
+int Solver::getPlannedTargetSpot(int agentIdx) const {
+    if (agentIdx >= 0 && agentIdx < static_cast<int>(currentTargets_.size())) {
+        return currentTargets_[agentIdx];
+    }
+    return -1;
+}
+
 // =============================================================================
 // Reset trạng thái đầu ngày
 // =============================================================================
@@ -120,7 +127,7 @@ std::vector<std::vector<int>> Solver::solve(
 
         actions[i] = SupplyPlanner::planDay(
             config, map, agent, state.agents, i,
-            daySteps, currentTargets_
+            daySteps, currentTargets_, currentTargets_[i]
         );
     }
 

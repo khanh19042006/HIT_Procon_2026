@@ -41,6 +41,7 @@ public:
      * @param supplyIdx          Index của xe Supply
      * @param daySteps           Tổng bước trong ngày
      * @param patrolTargetSpots  Spot mục tiêu của từng xe Patrol
+    * @param plannedTargetSpot  [OUT] Spot điểm hẹn mà xe Supply đã chọn
      * @return Chuỗi hành động hoàn chỉnh cho 1 ngày (có padding Wait)
      */
     static std::vector<int> planDay(
@@ -50,6 +51,7 @@ public:
         const std::vector<Agent>& allAgents,
         int supplyIdx,
         int daySteps,
-        const std::vector<int>& patrolTargetSpots
+        const std::vector<int>& patrolTargetSpots,
+        int& plannedTargetSpot
     );
 };

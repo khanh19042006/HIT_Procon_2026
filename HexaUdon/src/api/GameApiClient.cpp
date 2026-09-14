@@ -152,12 +152,12 @@ GameState GameApiClient::getMatchStatus(const std::string& matchId) {
         state.day = j.value("day", -1);
 
         // Debug: log raw fields
-        std::cerr << "[DEBUG] GET /status: day=" << state.day
-                  << " currentDay=" << j.value("currentDay", -1)
-                  << " totalDays=" << j.value("totalDays", -1)
-                  << " finished=" << j.value("finished", false)
-                  << " endsAt=" << state.endsAt
-                  << std::endl;
+        // std::cerr << "[DEBUG] GET /status: day=" << state.day
+        //           << " currentDay=" << j.value("currentDay", -1)
+        //           << " totalDays=" << j.value("totalDays", -1)
+        //           << " finished=" << j.value("finished", false)
+        //           << " endsAt=" << state.endsAt
+        //           << std::endl;
 
         if (j.contains("agents")) {
             for (const auto& a : j["agents"]) {

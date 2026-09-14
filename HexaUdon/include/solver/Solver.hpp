@@ -45,6 +45,13 @@ public:
         const GameState& state
     );
 
+    /**
+     * @brief Trả về Spot mục tiêu cuối cùng Solver đã lập cho một xe.
+     *
+     * Hàm chỉ đọc trạng thái kế hoạch, phục vụ SupplyPlanner và DiaryWriter.
+     */
+    int getPlannedTargetSpot(int agentIdx) const;
+
 private:
     // === Trạng thái xuyên trận ===
     std::set<int> collectedBrandsTotal_;   // Brand đã thu thập toàn trận

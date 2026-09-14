@@ -37,8 +37,11 @@ std::vector<int> SupplyPlanner::planDay(
     const std::vector<Agent>& allAgents,
     int supplyIdx,
     int daySteps,
-    const std::vector<int>& patrolTargetSpots
+    const std::vector<int>& patrolTargetSpots,
+    int& plannedTargetSpot
 ) {
+    plannedTargetSpot = -1;
+
     // Tìm xe Patrol cần cứu
     int targetPatrol = findTargetPatrol(allAgents, supplyIdx);
 
@@ -57,6 +60,7 @@ std::vector<int> SupplyPlanner::planDay(
     if (patrolTarget >= 0) {
         // Đón đầu: đi tới Spot mà xe Patrol đang nhắm tới
         targetPos = map.posToCoordinate(config.spots[patrolTarget].pos);
+        plannedTargetSpot = patrolTarget;
     } else {
         // Fallback: đi tới vị trí hiện tại của xe Patrol
         targetPos = map.posToCoordinate(allAgents[targetPatrol].pos);
