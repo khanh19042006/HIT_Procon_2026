@@ -1,96 +1,143 @@
 #include "solver/Solver.hpp"
+#include "solver/PatrolPlanner.hpp"
+#include "solver/SupplyPlanner.hpp"
 #include <iostream>
 
-/**
- * @brief Quyet dinh loai xe (0: Xe tuan tra, 1: Xe tiep te)
- * 
- * TODO [USER]: Ban co the thay doi chien thuat phan bo loai xe o day.
- * Mua xe Patrol hay Supply tuy thuoc vao luong gian hang va chien thuat cua doi.
- */
+// =============================================================================
+// AgentStrategy — Quyết định đội hình xe
+// =============================================================================
+
 std::vector<int> AgentStrategy::decideAgentTypes(const GameConfig& config) {
-    size_t numAgents = config.initialAgentPositions.size();
-    
-    // TODO [USER]: Viet logic chon xe o day nếu muon.
-    // Vi du: set xe dau la Supply (1), cac xe sau la Patrol (0)
-    std::vector<int> agentTypes(numAgents, 0);
-    return agentTypes;
+    size_t n = config.initialAgentPositions.size();
+    int mapArea = config.map.height * config.map.width;
+
+    // === CORE PRINCIPLE: Maximize Patrol cars, minimize Supply ===
+    // Patrol cars score points by visiting spots.
+    // Supply cars score ZERO — they only refuel patrols.
+    // So: use as many Patrols as possible, only 1 Supply.
+
+    // If fuel is enormous relative to map → no supply needed at all
+    if (config.fuelLimit >= mapArea * 2) {
+        return std::vector<int>(n, 0); // All Patrol
+    }
+
+    // Default strategy: (N-1) Patrol + 1 Supply
+    int supplyCount = 1;
+
+    // Very small team (1-2 agents): no supply, all patrol
+    if (n <= 2) {
+        supplyCount = 0;
+    }
+
+    // Large map + very low fuel + many agents → 2 supply
+    if (n >= 6 && config.fuelLimit <= 10 && mapArea > 400) {
+        supplyCount = 2;
+    }
+
+    // Safety: at least 1 patrol
+    if (supplyCount >= static_cast<int>(n)) {
+        supplyCount = static_cast<int>(n) - 1;
+    }
+
+    std::vector<int> types(n, 0); // Default: Patrol
+    for (int i = 0; i < supplyCount; ++i) {
+        types[n - 1 - i] = 1; // Supply from the end
+    }
+    return types;
 }
 
 std::vector<int> Solver::decideAgentTypes(const GameConfig& config) {
     return AgentStrategy::decideAgentTypes(config);
 }
 
-/**
- * =========================================================================
- * @brief HAM CHINH VIET LOGIC DI CHUYEN CHO CAC AGENT (SOLVER CORE)
- * =========================================================================
- * 
- * @param config  Chua thong tin co dinh (ban do, spots, daySteps...)
- * @param state   Chua thong tin thoi gian thuc (ngay hien tai, vi tri/fuel cac xe, traffic...)
- * @param map     Doi tuong Map ho tro: posToCoordinate, nextPosition, canMove...
- * @return std::vector<std::vector<int>> Chuoi hanh dong cua tung xe
- * 
- * LOGIC HOAT DONG HUONG DAN:
- * 1. Lay so buoc (daySteps) cua ngay hien tai: config.daySteps[state.day]
- * 2. Voi moi Agent (state.agents[i]):
- *    - Lấy vi tri hien tai: state.agents[i].pos -> chuyen sang toa do 2D `map.posToCoordinate(...)`
- *    - Lay luong nhien lieu con lai: state.agents[i].fuel
- *    - Tinh toan dich den va duong đi (Co the dung `PathFinder::findPath(...)`)
- *    - Sinh mảng hanh dong (0..5: di chuyen, -K: cho K buoc)
- * 3. Đảm bảo tong so buoc cua moi Agent == daySteps
- */
+int Solver::getPlannedTargetSpot(int agentIdx) const {
+    if (agentIdx >= 0 && agentIdx < static_cast<int>(currentTargets_.size())) {
+        return currentTargets_[agentIdx];
+    }
+    return -1;
+}
+
+// =============================================================================
+// Reset trạng thái đầu ngày
+// =============================================================================
+
+void Solver::resetDailyState(const GameConfig& config, int numAgents) {
+    // Reset stock to max for each spot (stock replenishes each day)
+    remainingStock_.resize(config.spots.size());
+    for (size_t i = 0; i < config.spots.size(); ++i) {
+        remainingStock_[i] = config.spots[i].stocks;
+    }
+
+    // Reset visited spots for each patrol
+    visitedSpotsToday_.assign(numAgents, {});
+
+    // Reset current targets
+    currentTargets_.assign(numAgents, -1);
+}
+
+// =============================================================================
+// MAIN SOLVER — Nhạc trưởng điều phối các module
+// =============================================================================
+
 std::vector<std::vector<int>> Solver::solve(
     const GameConfig& config,
     const GameState& state,
-    const Map& map
+    Map& map
 ) {
     int daySteps = 0;
     if (state.day >= 0 && state.day < static_cast<int>(config.daySteps.size())) {
         daySteps = config.daySteps[state.day];
     }
 
-    std::vector<std::vector<int>> actions(state.agents.size());
+    int numAgents = static_cast<int>(state.agents.size());
+    std::vector<std::vector<int>> actions(numAgents);
 
-    // =====================================================================
-    // TODO [USER]: VIET LOGIC DI CHUYEN CHO NGUOI DUNG TAI DAY
-    // =====================================================================
-    // Hien tai ham dang de trong va dung logic di chuyen 1 buoc an toan + cho
-    // de ban de dang ghi de va phat trien thuat toan rieng.
-    // ---------------------------------------------------------------------
+    if (daySteps <= 0) return actions;
 
-    for (size_t i = 0; i < state.agents.size(); ++i) {
-        Position currPos = map.posToCoordinate(state.agents[i].pos);
-        
-        // TODO [USER]: Thay the doan code tim huong ngau nhien/hoplê duoi đây
-        // bang thuat toan tim duong thuc su (A*, Dijkstra, BFS toi gian hang...)
-        int validDir = -1;
-        for (int dir = 0; dir < 6; ++dir) {
-            Position nxt = map.nextPosition(currPos, dir);
-            if (map.canMove(nxt)) {
-                validDir = dir;
-                break;
-            }
-        }
+    // 1. Cập nhật giao thông trên bản đồ
+    map.updateTraffic(state.traffics);
 
-        if (validDir != -1 && daySteps > 1) {
-            // Hanh dong vi du: Đi 1 buoc va cho (daySteps - 1) buoc
-            actions[i].push_back(validDir);
-            actions[i].push_back(-(daySteps - 1));
-        } else {
-            // Dung yen toan bo ngay neu khong co duong di
-            if (daySteps > 0) {
-                actions[i].push_back(-daySteps);
-            }
-        }
+    // 2. Reset trạng thái nếu là ngày mới
+    if (state.day != currentDay_) {
+        resetDailyState(config, numAgents);
+        currentDay_ = state.day;
     }
 
-    // =====================================================================
+    // 3. Lập kế hoạch cho xe TUẦN TRA (PatrolPlanner)
+    //    Tính trước để xe Supply biết mục tiêu của Patrol
+    for (int i = 0; i < numAgents; ++i) {
+        const Agent& agent = state.agents[i];
+        if (agent.kind != 0) continue; // Bỏ qua xe Supply
+
+        Position agentPos = map.posToCoordinate(agent.pos);
+
+        actions[i] = PatrolPlanner::planDay(
+            config, map, agentPos, daySteps, agent.fuel,
+            remainingStock_,
+            visitedSpotsToday_[i],
+            collectedBrandsTotal_,
+            currentTargets_[i]
+        );
+    }
+
+    // 4. Lập kế hoạch cho xe TIẾP TẾ (SupplyPlanner)
+    for (int i = 0; i < numAgents; ++i) {
+        const Agent& agent = state.agents[i];
+        if (agent.kind != 1) continue; // Bỏ qua xe Patrol
+
+        actions[i] = SupplyPlanner::planDay(
+            config, map, agent, state.agents, i,
+            daySteps, currentTargets_, currentTargets_[i]
+        );
+    }
+
     return actions;
 }
 
-/**
- * @brief Ke hoach an toan (Dung yen) khi validate bi loi
- */
+// =============================================================================
+// Fallback — Tất cả xe đứng yên cả ngày
+// =============================================================================
+
 std::vector<std::vector<int>> Solver::createFallbackActions(
     const GameConfig& config,
     const GameState& state

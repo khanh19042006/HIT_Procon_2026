@@ -2,12 +2,16 @@
 
 #include <vector>
 #include "model/Agent.hpp"
+#include "model/Traffic.hpp"
 
 class Map {
 private:
     int height;
     int width;
     std::vector<std::vector<int>> cells;
+
+    // Traffic status indexed by pos (flat array), default 0 (smooth)
+    std::vector<int> trafficStatus_;
 
 public:
     Map() : height(0), width(0) {}
@@ -29,4 +33,20 @@ public:
     int coordinateToPos(Position position) const;
 
     Position nextPosition(Position current, int direction) const;
+
+    // === NEW: Traffic, Travel Time, Fuel Cost ===
+
+    // Update traffic status from GameState traffics
+    void updateTraffic(const std::vector<Traffic>& traffics);
+
+    // Get traffic status for a cell (0: smooth, 1: congested, 2: jammed)
+    int getTrafficStatus(int pos) const;
+
+    // Travel Time = number of steps consumed when moving FROM this cell
+    int getTravelTime(int pos) const;
+    int getTravelTime(Position pos) const;
+
+    // Fuel consumption when a patrol car moves FROM this cell
+    int getFuelCost(int pos) const;
+    int getFuelCost(Position pos) const;
 };
