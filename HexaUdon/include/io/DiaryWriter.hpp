@@ -63,6 +63,10 @@ private:
         int agentIndex,
         const Agent& agent,
         int targetSpot,
+        Position targetPosition,
+        int supportedPatrol,
+        const std::vector<int>& plannedStepSpots,
+        const std::vector<Position>& plannedStepPositions,
         const GameConfig& config,
         const Map& map,
         const std::vector<int>& actions

@@ -28,6 +28,9 @@ public:
      * @param visitedToday     [IN/OUT] Spot đã ghé trong ngày
      * @param collectedBrands  [IN/OUT] Brand đã thu thập (toàn trận)
      * @param lastTargetSpot   [OUT] Spot cuối cùng xe nhắm tới (để Supply đón đầu)
+    * @param plannedTargetPos [OUT] Vị trí chính xác xe đang hướng tới
+    * @param plannedStepSpots [OUT] Spot mục tiêu tại từng step trong ngày
+    * @param plannedStepPositions [OUT] Vị trí mục tiêu tại từng step trong ngày
      * @return Chuỗi hành động hoàn chỉnh cho 1 ngày (có padding Wait)
      */
     static std::vector<int> planDay(
@@ -39,6 +42,9 @@ public:
         std::vector<int>& remainingStock,
         std::set<int>& visitedToday,
         std::set<int>& collectedBrands,
-        int& lastTargetSpot
+        int& lastTargetSpot,
+        Position& plannedTargetPos,
+        std::vector<int>& plannedStepSpots,
+        std::vector<Position>& plannedStepPositions
     );
 };

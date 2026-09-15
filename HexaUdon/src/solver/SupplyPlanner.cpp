@@ -1,6 +1,7 @@
 #include "solver/SupplyPlanner.hpp"
 #include "solver/MoveSimulator.hpp"
 #include "solver/PathFinder.hpp"
+#include <algorithm>
 #include <climits>
 
 // =============================================================================
@@ -38,9 +39,18 @@ std::vector<int> SupplyPlanner::planDay(
     int supplyIdx,
     int daySteps,
     const std::vector<int>& patrolTargetSpots,
-    int& plannedTargetSpot
+    const std::vector<Position>& patrolTargetPositions,
+    int& plannedTargetPatrol,
+    int& plannedTargetSpot,
+    Position& plannedTargetPos,
+    std::vector<int>& plannedStepSpots,
+    std::vector<Position>& plannedStepPositions
 ) {
+    plannedTargetPatrol = -1;
     plannedTargetSpot = -1;
+    plannedTargetPos = map.posToCoordinate(supplyAgent.pos);
+    plannedStepSpots.assign(daySteps, -1);
+    plannedStepPositions.assign(daySteps, plannedTargetPos);
 
     // Tìm xe Patrol cần cứu
     int targetPatrol = findTargetPatrol(allAgents, supplyIdx);
@@ -49,6 +59,7 @@ std::vector<int> SupplyPlanner::planDay(
         // Không tìm thấy xe Patrol → đứng yên cả ngày
         return {-daySteps};
     }
+    plannedTargetPatrol = targetPatrol;
 
     // Xác định điểm hẹn (Rendezvous)
     Position targetPos;
@@ -57,14 +68,17 @@ std::vector<int> SupplyPlanner::planDay(
         patrolTarget = patrolTargetSpots[targetPatrol];
     }
 
-    if (patrolTarget >= 0) {
-        // Đón đầu: đi tới Spot mà xe Patrol đang nhắm tới
-        targetPos = map.posToCoordinate(config.spots[patrolTarget].pos);
+    if (patrolTarget >= 0 && targetPatrol < static_cast<int>(patrolTargetPositions.size())) {
+        // Đón đầu: dùng đúng vị trí mà PatrolPlanner đã chọn trong solve()
+        targetPos = patrolTargetPositions[targetPatrol];
         plannedTargetSpot = patrolTarget;
     } else {
         // Fallback: đi tới vị trí hiện tại của xe Patrol
         targetPos = map.posToCoordinate(allAgents[targetPatrol].pos);
     }
+    plannedTargetPos = targetPos;
+    std::fill(plannedStepSpots.begin(), plannedStepSpots.end(), plannedTargetSpot);
+    std::fill(plannedStepPositions.begin(), plannedStepPositions.end(), plannedTargetPos);
 
     // Tìm đường đến điểm hẹn
     Position agentPos = map.posToCoordinate(supplyAgent.pos);

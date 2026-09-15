@@ -523,13 +523,39 @@ Tạo thư mục `diary/<matchId>/` nếu chưa có và ghi file
 - số step và loại kế hoạch (`Solver` hoặc `Fallback`);
 - từng xe, loại xe, vị trí và fuel đầu ngày;
 - Spot mục tiêu mà Solver đã chọn;
+- tọa độ đích chính xác do planner trả ra khi gọi `PathFinder`;
 - bảng từng action, khoảng step bị tiêu thụ, vị trí sau action và fuel còn lại;
 - mảng action hoàn chỉnh cuối ngày.
+
+Trong bảng hành trình, vị trí sau action, khoảng step và fuel còn lại là **mô
+phỏng cục bộ** từ action đã gửi và bản đồ/traffic lúc lập kế hoạch. API hiện
+chỉ cung cấp trạng thái server ở đầu ngày, không cung cấp trạng thái thực tế
+sau từng action; vì vậy diary không gọi các giá trị mô phỏng này là trạng thái
+đã được server xác nhận.
 
 Hàm được gọi **sau khi** `submitActions()` thành công, vì vậy diary chỉ ghi
 kế hoạch thực sự đã gửi được server chấp nhận. Action của xe Supply lấy từ
 đúng điểm hẹn mà `SupplyPlanner` đã chọn, không tự tính lại trong module ghi
 file.
+
+### Dữ liệu đích chính xác từ Solver
+
+`PatrolPlanner::planDay(...)` ghi vị trí Spot cuối cùng đã được chọn vào
+`plannedTargetPos`. `SupplyPlanner::planDay(...)` nhận trực tiếp vị trí đích của
+Patrol trong cùng lượt `solve()` rồi ghi vị trí điểm hẹn thực tế vào cùng loại
+dữ liệu; điểm hẹn có thể là Spot của Patrol hoặc vị trí hiện tại của Patrol khi
+không có Spot mục tiêu.
+
+`Solver` lưu các vị trí này trong `currentTargetPositions_` và cung cấp qua
+`getPlannedTargetPosition(...)`. `DiaryWriter` chỉ đọc giá trị đó để ghi mục
+tiêu và đối chiếu từng bước, không suy đoán lại tọa độ từ mảng action.
+Với xe Supply, `SupplyPlanner` đồng thời ghi `plannedTargetPatrol`; diary dùng
+giá trị này để chỉ rõ Supply đang đi đến điểm hẹn của xe Patrol nào.
+
+Ngoài mục tiêu cuối ngày, mỗi planner còn ghi `plannedStepSpots` và
+`plannedStepPositions`. Hai mảng này có một phần tử cho từng step; vì vậy khi
+Patrol chuyển sang Spot tiếp theo, hoặc khi Supply giữ điểm hẹn, diary đọc đúng
+mục tiêu tại step tương ứng thay vì lặp lại mục tiêu cuối ngày.
 
 ### Các hàm định dạng nội bộ
 

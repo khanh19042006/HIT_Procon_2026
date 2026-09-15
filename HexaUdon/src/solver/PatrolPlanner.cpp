@@ -16,12 +16,18 @@ std::vector<int> PatrolPlanner::planDay(
     std::vector<int>& remainingStock,
     std::set<int>& visitedToday,
     std::set<int>& collectedBrands,
-    int& lastTargetSpot
+    int& lastTargetSpot,
+    Position& plannedTargetPos,
+    std::vector<int>& plannedStepSpots,
+    std::vector<Position>& plannedStepPositions
 ) {
     std::vector<int> allActions;
     int stepsUsed = 0;
     int fuelRemaining = availableFuel;
     Position currentPos = startPos;
+    plannedTargetPos = startPos;
+    plannedStepSpots.assign(daySteps, -1);
+    plannedStepPositions.assign(daySteps, startPos);
 
     // Vòng lặp Greedy: ghé Spot liên tục cho đến khi không thể nữa
     while (true) {
@@ -50,11 +56,24 @@ std::vector<int> PatrolPlanner::planDay(
             stepsRemaining, fuelRemaining, true
         );
 
+        int traceStep = stepsUsed;
+        Position tracePosition = currentPos;
+        for (int simulatedAction : sim.actions) {
+            int actionSteps = map.getTravelTime(tracePosition);
+            for (int offset = 0; offset < actionSteps && traceStep + offset < daySteps; ++offset) {
+                plannedStepSpots[traceStep + offset] = nextSpot;
+                plannedStepPositions[traceStep + offset] = spotPos;
+            }
+            traceStep += actionSteps;
+            tracePosition = map.nextPosition(tracePosition, simulatedAction);
+        }
+
         // Bước 4: Cập nhật trạng thái
         allActions.insert(allActions.end(), sim.actions.begin(), sim.actions.end());
         stepsUsed += sim.stepsUsed;
         fuelRemaining -= sim.fuelUsed;
         currentPos = sim.finalPos;
+        plannedTargetPos = spotPos;
 
         // Bước 5: Đánh dấu Spot đã ghé + cập nhật stock + brand
         visitedToday.insert(nextSpot);
@@ -63,10 +82,16 @@ std::vector<int> PatrolPlanner::planDay(
 
         // Ghi nhớ Spot cuối cùng (để Supply biết đón đầu ở đâu)
         lastTargetSpot = nextSpot;
+        plannedTargetPos = spotPos;
     }
 
     // Padding: thêm Wait cho đủ daySteps
     MoveSimulator::padWithWait(allActions, stepsUsed, daySteps);
+
+    for (int step = stepsUsed; step < daySteps; ++step) {
+        plannedStepSpots[step] = lastTargetSpot;
+        plannedStepPositions[step] = plannedTargetPos;
+    }
 
     return allActions;
 }

@@ -52,6 +52,22 @@ public:
      */
     int getPlannedTargetSpot(int agentIdx) const;
 
+    /**
+     * @brief Trả về đúng vị trí đích mà planner đã truyền cho PathFinder.
+     */
+    Position getPlannedTargetPosition(int agentIdx) const;
+
+    /**
+     * @brief Trả về xe Patrol mà một xe Supply đã chọn để hỗ trợ.
+     */
+    int getSupportedPatrol(int agentIdx) const;
+
+    /** @brief Trả về Spot mục tiêu được planner ghi cho một step cụ thể. */
+    int getPlannedStepSpot(int agentIdx, int step) const;
+
+    /** @brief Trả về tọa độ mục tiêu được planner ghi cho một step cụ thể. */
+    Position getPlannedStepPosition(int agentIdx, int step) const;
+
 private:
     // === Trạng thái xuyên trận ===
     std::set<int> collectedBrandsTotal_;   // Brand đã thu thập toàn trận
@@ -61,6 +77,10 @@ private:
     std::vector<int> remainingStock_;                  // Stock còn lại mỗi Spot
     std::vector<std::set<int>> visitedSpotsToday_;     // Spot đã ghé mỗi xe
     std::vector<int> currentTargets_;                  // Spot mục tiêu mỗi xe (cho Supply)
+    std::vector<Position> currentTargetPositions_;     // Vị trí đích chính xác mỗi xe
+    std::vector<int> supportedPatrols_;                // Patrol được Supply hỗ trợ
+    std::vector<std::vector<int>> plannedStepSpots_;   // Spot mục tiêu theo từng step
+    std::vector<std::vector<Position>> plannedStepPositions_; // Tọa độ mục tiêu theo từng step
 
     void resetDailyState(const GameConfig& config, int numAgents);
 };

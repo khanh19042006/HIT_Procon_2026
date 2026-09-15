@@ -57,6 +57,36 @@ int Solver::getPlannedTargetSpot(int agentIdx) const {
     return -1;
 }
 
+Position Solver::getPlannedTargetPosition(int agentIdx) const {
+    if (agentIdx >= 0 && agentIdx < static_cast<int>(currentTargetPositions_.size())) {
+        return currentTargetPositions_[agentIdx];
+    }
+    return {-1, -1};
+}
+
+int Solver::getPlannedStepSpot(int agentIdx, int step) const {
+    if (agentIdx >= 0 && agentIdx < static_cast<int>(plannedStepSpots_.size()) &&
+        step >= 0 && step < static_cast<int>(plannedStepSpots_[agentIdx].size())) {
+        return plannedStepSpots_[agentIdx][step];
+    }
+    return -1;
+}
+
+Position Solver::getPlannedStepPosition(int agentIdx, int step) const {
+    if (agentIdx >= 0 && agentIdx < static_cast<int>(plannedStepPositions_.size()) &&
+        step >= 0 && step < static_cast<int>(plannedStepPositions_[agentIdx].size())) {
+        return plannedStepPositions_[agentIdx][step];
+    }
+    return {-1, -1};
+}
+
+int Solver::getSupportedPatrol(int agentIdx) const {
+    if (agentIdx >= 0 && agentIdx < static_cast<int>(supportedPatrols_.size())) {
+        return supportedPatrols_[agentIdx];
+    }
+    return -1;
+}
+
 // =============================================================================
 // Reset trạng thái đầu ngày
 // =============================================================================
@@ -73,6 +103,10 @@ void Solver::resetDailyState(const GameConfig& config, int numAgents) {
 
     // Reset current targets
     currentTargets_.assign(numAgents, -1);
+    currentTargetPositions_.assign(numAgents, {-1, -1});
+    supportedPatrols_.assign(numAgents, -1);
+    plannedStepSpots_.assign(numAgents, {});
+    plannedStepPositions_.assign(numAgents, {});
 }
 
 // =============================================================================
@@ -116,7 +150,10 @@ std::vector<std::vector<int>> Solver::solve(
             remainingStock_,
             visitedSpotsToday_[i],
             collectedBrandsTotal_,
-            currentTargets_[i]
+            currentTargets_[i],
+            currentTargetPositions_[i],
+            plannedStepSpots_[i],
+            plannedStepPositions_[i]
         );
     }
 
@@ -127,7 +164,10 @@ std::vector<std::vector<int>> Solver::solve(
 
         actions[i] = SupplyPlanner::planDay(
             config, map, agent, state.agents, i,
-            daySteps, currentTargets_, currentTargets_[i]
+            daySteps, currentTargets_, currentTargetPositions_,
+            supportedPatrols_[i], currentTargets_[i],
+            currentTargetPositions_[i],
+            plannedStepSpots_[i], plannedStepPositions_[i]
         );
     }
 
