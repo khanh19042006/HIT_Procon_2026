@@ -27,22 +27,21 @@ std::string formatActionList(const std::vector<int>& actions) {
 } // namespace
 
 std::string DiaryWriter::agentKindName(int kind) {
-    return kind == 0 ? "Patrol" : "Supply";
+    return kind == 0 ? "Tuần tra" : "Tiếp tế";
 }
 
 std::string DiaryWriter::spotName(int spotIndex, const GameConfig& config) {
     if (spotIndex < 0 || spotIndex >= static_cast<int>(config.spots.size())) {
-        return "Khong co Spot muc tieu";
+        return "Không có Spot mục tiêu";
     }
 
     const Spot& spot = config.spots[spotIndex];
+        int width = config.map.width > 0 ? config.map.width : 1;
+        int x = spot.pos % width;
+        int y = spot.pos / width;
     return "Spot #" + std::to_string(spotIndex) +
-           " (brand=" + std::to_string(spot.brand) +
-           ", pos=" + std::to_string(spot.pos) + ")";
-}
-
-static std::string formatCellSummary(const Position& position) {
-    return formatPosition(position) + " (cell=" + std::to_string(position.x + position.y * 1000) + ")";
+           " (thương hiệu=" + std::to_string(spot.brand) +
+            ", tọa độ=" + formatPosition({x, y}) + ")";
 }
 
 static std::string describeCurrentTarget(
@@ -51,24 +50,24 @@ static std::string describeCurrentTarget(
     const Map& map
 ) {
     if (targetSpot < 0 || targetSpot >= static_cast<int>(config.spots.size())) {
-        return "Khong co muc tieu";
+        return "Không có mục tiêu";
     }
 
     const Spot& spot = config.spots[targetSpot];
     Position spotPos = map.posToCoordinate(spot.pos);
     return "Spot #" + std::to_string(targetSpot) +
-           " (brand=" + std::to_string(spot.brand) + ", o=" +
+            " (thương hiệu=" + std::to_string(spot.brand) + ", tọa độ=" +
            formatPosition(spotPos) + ")";
 }
 
 std::string DiaryWriter::actionName(int action) {
     if (action < 0) {
-        return "Cho " + std::to_string(-action) + " step";
+        return "Chờ " + std::to_string(-action) + " bước";
     }
     if (action <= 5) {
-        return "Di chuyen huong " + std::to_string(action);
+        return "Di chuyển hướng " + std::to_string(action);
     }
-    return "Action khong hop le " + std::to_string(action);
+    return "Hành động không hợp lệ " + std::to_string(action);
 }
 
 std::string DiaryWriter::formatActions(const std::vector<int>& actions) {
@@ -89,20 +88,20 @@ void DiaryWriter::writeAgentTimeline(
     int currentFuel = agent.fuel;
 
     output << "### Xe #" << agentIndex << " - " << agentKindName(agent.kind) << "\n\n";
-    output << "- Vi tri dau ngay: " << formatPosition(currentPosition)
-           << " (cell=" << agent.pos << ")\n";
-    output << "- Nhien lieu dau ngay: " << agent.fuel << "\n";
-    output << "- Muc tieu hien tai: " << describeCurrentTarget(targetSpot, config, map) << "\n";
-    output << "- Dia diem den: " << spotName(targetSpot, config) << "\n";
-    output << "- Mang action cuoi ngay: " << formatActions(actions) << "\n\n";
-    output << "| Step | Hanh dong | Tu o | Den o | Muc tieu/spot | Fuel con lai |\n";
+        output << "- Vị trí đầu ngày: " << formatPosition(currentPosition)
+            << " (ô=" << agent.pos << ")\n";
+        output << "- Nhiên liệu đầu ngày: " << agent.fuel << "\n";
+        output << "- Mục tiêu hiện tại: " << describeCurrentTarget(targetSpot, config, map) << "\n";
+        output << "- Địa điểm đến: " << spotName(targetSpot, config) << "\n";
+        output << "- Mảng hành động cuối ngày: " << formatActions(actions) << "\n\n";
+        output << "| Bước | Hành động | Từ ô | Đến ô | Mục tiêu/Spot | Nhiên liệu còn lại |\n";
     output << "|---:|---|---|---|---|---:|\n";
 
     for (int action : actions) {
         int startStep = currentStep;
         int duration = 1;
         Position nextPosition = currentPosition;
-        std::string targetDescription = "Dung yen tai " + formatPosition(currentPosition);
+        std::string targetDescription = "Đứng yên tại " + formatPosition(currentPosition);
 
         if (action < 0) {
             duration = -action;
@@ -112,14 +111,14 @@ void DiaryWriter::writeAgentTimeline(
                 currentFuel -= map.getFuelCost(currentPosition);
             }
             nextPosition = map.nextPosition(currentPosition, action);
-            targetDescription = "Di chuyen den " + formatPosition(nextPosition);
+            targetDescription = "Di chuyển đến " + formatPosition(nextPosition);
 
             if (targetSpot >= 0 && targetSpot < static_cast<int>(config.spots.size())) {
                 Position spotPos = map.posToCoordinate(config.spots[targetSpot].pos);
                 if (nextPosition == spotPos) {
-                    targetDescription = "Dat muc tieu " + spotName(targetSpot, config);
+                    targetDescription = "Đã đạt mục tiêu " + spotName(targetSpot, config);
                 } else {
-                    targetDescription += "; huong toi " + spotName(targetSpot, config);
+                    targetDescription += "; hướng tới " + spotName(targetSpot, config);
                 }
             }
         }
@@ -139,9 +138,9 @@ void DiaryWriter::writeAgentTimeline(
     }
 
     if (actions.empty()) {
-        output << "| - | Khong co action | " << formatPosition(currentPosition)
+        output << "| - | Không có hành động | " << formatPosition(currentPosition)
                << " | " << formatPosition(currentPosition)
-               << " | Dung yen tai vi tri hien tai | " << currentFuel << " |\n";
+               << " | Đứng yên tại vị trí hiện tại | " << currentFuel << " |\n";
     }
     output << "\n";
 }
@@ -167,10 +166,10 @@ bool DiaryWriter::writeDay(
     std::ofstream output(filePath);
     if (!output) return false;
 
-    output << "# Nhat ky hanh trinh - Ngay " << day << "\n\n";
-    output << "- So step trong ngay: " << daySteps << "\n";
-    output << "- So xe: " << state.agents.size() << "\n";
-    output << "- Ke hoach: " << (usedFallback ? "Fallback" : "Solver") << "\n\n";
+    output << "# Nhật ký hành trình - Ngày " << day << "\n\n";
+    output << "- Số bước trong ngày: " << daySteps << "\n";
+    output << "- Số xe: " << state.agents.size() << "\n";
+    output << "- Kế hoạch: " << (usedFallback ? "Dự phòng" : "Bộ giải") << "\n\n";
 
     for (size_t i = 0; i < state.agents.size(); ++i) {
         const std::vector<int> emptyActions;
